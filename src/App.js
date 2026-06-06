@@ -5,6 +5,40 @@ import { awsconfig } from "./aws-exports";
 
 Amplify.configure(awsconfig);
 
+// ─── BROWSER PUSH NOTIFICATIONS ───────────────────────────────────────────────
+const registerServiceWorker = async () => {
+  if (!("serviceWorker" in navigator) || !("Notification" in window)) return null;
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    return reg;
+  } catch (e) { console.log("SW registration failed:", e); return null; }
+};
+
+const requestNotificationPermission = async () => {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const permission = await Notification.requestPermission();
+  return permission === "granted";
+};
+
+const showBrowserNotification = (title, body, url = "/") => {
+  if (Notification.permission !== "granted") return;
+  navigator.serviceWorker?.ready.then(reg => {
+    reg.showNotification(title, {
+      body,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      tag: "agile-" + Date.now(),
+      data: { url },
+      requireInteraction: false,
+    });
+  }).catch(() => {
+    // Fallback to basic notification
+    new Notification(title, { body, icon: "/favicon.ico" });
+  });
+};
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API_BASE = "https://86y86kc1e1.execute-api.us-east-1.amazonaws.com/prod";
 
@@ -217,6 +251,9 @@ function App() {
   const addNotification = (message, type = "info", link = "") => {
     const n = { id: Date.now(), message, type, link, read: false, createdAt: new Date().toISOString() };
     setNotifications(prev => [n, ...prev].slice(0, 50));
+    // Also show browser push notification
+    const icons = { success: "✅", error: "❌", warning: "⚠️", info: "ℹ️" };
+    showBrowserNotification(`${icons[type] || "ℹ️"} Agile IT Systems`, message, link || "/");
   };
   const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   const clearNotifications = () => setNotifications([]);
@@ -312,6 +349,8 @@ function App() {
       await loadTimesheets(email, r);
       await loadLeaves(email, r);
       await loadSlots();
+      // Register service worker and request notification permission
+      registerServiceWorker().then(() => requestNotificationPermission());
     } catch (err) {
       alert(err.message || "Invalid credentials.");
     } finally { setLoading(false); }

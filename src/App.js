@@ -131,6 +131,10 @@ function App() {
   const [adminTab, setAdminTab] = useState("overview");
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("");
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({ name: "", email: "", role: "employee", manager: "" });
+  const [addUserLoading, setAddUserLoading] = useState(false);
+  const [addUserMsg, setAddUserMsg] = useState("");
   const [kbDocs, setKbDocs] = useState([
     { id: 1, title: "React Training Guide", category: "Training", file: "react-training.pdf", uploadedBy: "admin", uploadedAt: "2024-01-10" },
     { id: 2, title: "Onboarding Manual", category: "HR", file: "onboarding.pdf", uploadedBy: "admin", uploadedAt: "2024-01-12" },
@@ -1348,9 +1352,65 @@ function App() {
     const deleteKbDoc = (id) => { if (window.confirm("Delete this document?")) setKbDocs(kbDocs.filter((d) => d.id !== id)); };
     const tabStyle = (tab) => ({ padding: "10px 20px", border: "none", borderBottom: adminTab === tab ? "3px solid #0f3460" : "3px solid transparent", background: "transparent", cursor: "pointer", fontWeight: adminTab === tab ? "700" : "400", color: adminTab === tab ? "#0f3460" : "#888", fontSize: "14px" });
 
+    const handleAddUser = async () => {
+      if (!newUserForm.name || !newUserForm.email || !newUserForm.role) { setAddUserMsg("❌ Please fill all required fields."); return; }
+      setAddUserLoading(true); setAddUserMsg("");
+      try {
+        const res = await fetch(`${API}/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newUserForm.name, email: newUserForm.email, role: newUserForm.role, manager: newUserForm.manager, createdBy: user?.username || "admin" })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setAddUserMsg("✅ User created! A welcome email with temporary password has been sent.");
+          setUsers([...users, { username: newUserForm.email, email: newUserForm.email, role: newUserForm.role, manager: newUserForm.manager, status: "active" }]);
+          setNewUserForm({ name: "", email: "", role: "employee", manager: "" });
+          setTimeout(() => { setShowAddUser(false); setAddUserMsg(""); }, 2000);
+        } else { setAddUserMsg(`❌ ${data.error || "Failed to create user"}`); }
+      } catch (e) { setAddUserMsg("❌ Network error. Please try again."); }
+      setAddUserLoading(false);
+    };
+
+    const AddUserModal = () => (
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+        <div style={{ background: "#fff", borderRadius: "16px", padding: "32px", width: "460px", maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <h3 style={{ margin: "0 0 24px", fontSize: "20px", color: "#1a1a2e" }}>➕ Add New User</h3>
+          {addUserMsg && <div style={{ padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", background: addUserMsg.startsWith("✅") ? "#d4edda" : "#f8d7da", color: addUserMsg.startsWith("✅") ? "#155724" : "#721c24", fontSize: "14px" }}>{addUserMsg}</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "6px" }}>Full Name *</label>
+              <input style={styles.formInput} placeholder="e.g. John Smith" value={newUserForm.name} onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "6px" }}>Email Address *</label>
+              <input style={styles.formInput} type="email" placeholder="e.g. john@example.com" value={newUserForm.email} onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "6px" }}>Role *</label>
+              <select style={styles.select} value={newUserForm.role} onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value })}>
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "6px" }}>Manager Email (optional)</label>
+              <input style={styles.formInput} placeholder="e.g. manager@example.com" value={newUserForm.manager} onChange={(e) => setNewUserForm({ ...newUserForm, manager: e.target.value })} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
+            <button style={{ ...styles.btnBlue, flex: 1, opacity: addUserLoading ? 0.7 : 1 }} onClick={handleAddUser} disabled={addUserLoading}>{addUserLoading ? "Creating..." : "Create User"}</button>
+            <button style={{ ...styles.btnSmall, background: "#f0f2f5", color: "#444", padding: "10px 20px", fontSize: "14px" }} onClick={() => { setShowAddUser(false); setAddUserMsg(""); }}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    );
+
     return (
       <div style={styles.body}>
         <Navbar title="Agile IT Systems Inc" />
+        {showAddUser && <AddUserModal />}
         <div style={styles.page}>
           {apiError && <div style={styles.banner("error")}>⚠️ {apiError}</div>}
           {apiLoading && <div style={styles.banner("info")}>⏳ Loading...</div>}
@@ -1441,7 +1501,7 @@ function App() {
                     <option value="manager">Manager</option>
                     <option value="admin">Admin</option>
                   </select>
-                  <button style={styles.btnBlue} onClick={() => alert("Connect to Cognito AdminCreateUser API to add users.")}>➕ Add User</button>
+                  <button style={styles.btnBlue} onClick={() => { setShowAddUser(true); setAddUserMsg(""); }}>➕ Add User</button>
                 </div>
                 <table style={styles.table}>
                   <thead><tr>{["Username", "Email", "Role", "Manager", "Status", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>

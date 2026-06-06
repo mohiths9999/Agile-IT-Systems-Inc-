@@ -142,8 +142,34 @@ function App() {
   ]);
   const [newKbDoc, setNewKbDoc] = useState({ title: "", category: "", file: null, fileName: "" });
 
-  // ─── FORM STATE ───────────────────────────────────────────────────────────
-  // ─── LEAVE STATE ────────────────────────────────────────────────────────────
+  // ─── NOTIFICATIONS STATE ──────────────────────────────────────────────────
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  // ─── LEAVE BALANCE STATE ─────────────────────────────────────────────────
+  const leaveTypes = ["Casual Leave", "Sick Leave", "Earned Leave", "Maternity Leave", "Paternity Leave"];
+  const leaveEntitlement = { "Casual Leave": 12, "Sick Leave": 8, "Earned Leave": 15, "Maternity Leave": 90, "Paternity Leave": 5 };
+
+  // ─── USER EDIT STATE ─────────────────────────────────────────────────────
+  const [editUserModal, setEditUserModal] = useState({ open: false, user: null });
+  const [editUserForm, setEditUserForm] = useState({ name: "", role: "employee", manager: "" });
+  const [editUserLoading, setEditUserLoading] = useState(false);
+  const [editUserMsg, setEditUserMsg] = useState("");
+
+  // ─── LEAVE CALENDAR STATE ────────────────────────────────────────────────
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+
+  // ─── HOLIDAYS ────────────────────────────────────────────────────────────
+  const [holidays, setHolidays] = useState([
+    { date: "2026-01-01", name: "New Year's Day" },
+    { date: "2026-01-26", name: "Republic Day" },
+    { date: "2026-08-15", name: "Independence Day" },
+    { date: "2026-10-02", name: "Gandhi Jayanti" },
+    { date: "2026-11-26", name: "Thanksgiving" },
+    { date: "2026-12-25", name: "Christmas Day" },
+  ]);
   const [leaves, setLeaves] = useState([]);
   const [leaveForm, setLeaveForm] = useState({ type: "Casual Leave", fromDate: "", toDate: "", reason: "" });
   const [leaveTab, setLeaveTab] = useState("apply"); // apply | history
@@ -186,6 +212,28 @@ function App() {
     employeeEmail: t.employeeEmail || t.employeeId || t.employee || "",
     status: t.status || "Pending",
   });
+
+  // ─── NOTIFICATIONS ───────────────────────────────────────────────────────
+  const addNotification = (message, type = "info", link = "") => {
+    const n = { id: Date.now(), message, type, link, read: false, createdAt: new Date().toISOString() };
+    setNotifications(prev => [n, ...prev].slice(0, 50));
+  };
+  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const clearNotifications = () => setNotifications([]);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // ─── LEAVE BALANCE CALC ───────────────────────────────────────────────────
+  const getLeaveBalance = (email) => {
+    const used = {};
+    leaveTypes.forEach(t => used[t] = 0);
+    leaves.filter(l => (l.employeeEmail === email) && l.status === "Approved").forEach(l => {
+      const days = Math.ceil((new Date(l.toDate) - new Date(l.fromDate)) / (1000*60*60*24)) + 1;
+      used[l.type] = (used[l.type] || 0) + days;
+    });
+    const balance = {};
+    leaveTypes.forEach(t => balance[t] = { entitled: leaveEntitlement[t], used: used[t] || 0, remaining: leaveEntitlement[t] - (used[t] || 0) });
+    return balance;
+  };
 
   // ─── LOAD LEAVES ─────────────────────────────────────────────────────────────
   const loadLeaves = async (userEmail, userRole) => {
@@ -321,8 +369,8 @@ function App() {
         });
         setForm({ fromDate: "", toDate: "", project: "", task: "", description: "", hours: "", comments: "", supportingDoc: null, supportingDocName: "" });
         setTimeout(() => loadTimesheets(user, role), 800);
-        alert("✅ Timesheet submitted!");
-      } catch (err) { alert("❌ Failed to submit: " + err.message); }
+        addNotification("Timesheet submitted successfully! Pending manager review.", "success");
+      } catch (err) { addNotification("Failed to submit timesheet: " + err.message, "error"); }
       finally { setApiLoading(false); }
     } else {
       if (!dailyForm.weekStart || !dailyForm.project || !dailyForm.task) {
@@ -347,8 +395,8 @@ function App() {
         });
         setDailyForm({ weekStart: "", project: "", task: "", description: "", comments: "", supportingDoc: null, supportingDocName: "", days: { mon: "", tue: "", wed: "", thu: "", fri: "", sat: "", sun: "" } });
         setTimeout(() => loadTimesheets(user, role), 800);
-        alert("✅ Timesheet submitted!");
-      } catch (err) { alert("❌ Failed to submit: " + err.message); }
+        addNotification("Timesheet submitted successfully! Pending manager review.", "success");
+      } catch (err) { addNotification("Failed to submit timesheet: " + err.message, "error"); }
       finally { setApiLoading(false); }
     }
   };
@@ -408,10 +456,9 @@ function App() {
         (ts.timesheetId === tid || ts.id === tid) ? { ...ts, status: "Approved" } : ts
       ));
       setTimeout(() => loadTimesheets(user, role), 1200);
-      alert("✅ Timesheet approved!");
+      addNotification(`Timesheet approved for ${empEmail}`, "success");
     } catch (err) {
-      console.error("Approve failed:", err);
-      alert("❌ Failed to approve: " + err.message);
+      addNotification("Failed to approve: " + err.message, "error");
     } finally { setApiLoading(false); }
   };
 
@@ -445,10 +492,9 @@ function App() {
       ));
       setRejectModal({ open: false, id: null, timesheetData: null, comment: "" });
       setTimeout(() => loadTimesheets(user, role), 1200);
-      alert("✅ Timesheet rejected.");
+      addNotification(`Timesheet rejected for ${empEmail}`, "warning");
     } catch (err) {
-      console.error("Reject failed:", err);
-      alert("❌ Failed to reject: " + err.message);
+      addNotification("Failed to reject: " + err.message, "error");
     } finally { setApiLoading(false); }
   };
 
@@ -466,6 +512,38 @@ function App() {
         <div style={styles.navTitle}>{title}</div>
       </div>
       <div style={styles.navRight}>
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setShowNotifications(!showNotifications)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "22px", position: "relative", padding: "4px 8px" }}>
+            🔔
+            {unreadCount > 0 && <span style={{ position: "absolute", top: "-2px", right: "0px", background: "#e74c3c", color: "#fff", borderRadius: "50%", fontSize: "11px", fontWeight: "700", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}
+          </button>
+          {showNotifications && (
+            <div style={{ position: "absolute", right: 0, top: "40px", width: "360px", background: "#fff", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", zIndex: 2000, maxHeight: "420px", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: "700", fontSize: "15px" }}>🔔 Notifications {unreadCount > 0 && <span style={{ background: "#e74c3c", color: "#fff", borderRadius: "12px", padding: "2px 8px", fontSize: "12px", marginLeft: "6px" }}>{unreadCount} new</span>}</span>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={markAllRead} style={{ fontSize: "12px", color: "#0f3460", background: "none", border: "none", cursor: "pointer" }}>Mark all read</button>
+                  <button onClick={clearNotifications} style={{ fontSize: "12px", color: "#e74c3c", background: "none", border: "none", cursor: "pointer" }}>Clear</button>
+                </div>
+              </div>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "32px", textAlign: "center", color: "#aaa", fontSize: "14px" }}>No notifications yet</div>
+                ) : notifications.map(n => (
+                  <div key={n.id} onClick={() => setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))}
+                    style={{ padding: "12px 16px", borderBottom: "1px solid #f5f5f5", background: n.read ? "#fff" : "#f0f4ff", cursor: "pointer", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                    <span style={{ fontSize: "18px" }}>{n.type === "success" ? "✅" : n.type === "error" ? "❌" : n.type === "warning" ? "⚠️" : "ℹ️"}</span>
+                    <div>
+                      <div style={{ fontSize: "13px", color: "#333" }}>{n.message}</div>
+                      <div style={{ fontSize: "11px", color: "#aaa", marginTop: "3px" }}>{new Date(n.createdAt).toLocaleString()}</div>
+                    </div>
+                    {!n.read && <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#0f3460", marginLeft: "auto", marginTop: "4px", flexShrink: 0 }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <span style={styles.navUser}>👤 {user}</span>
         <span style={styles.navRole}>{role}</span>
         <button style={styles.btnLogout} onClick={logout}>Logout</button>
@@ -854,7 +932,7 @@ function App() {
           <div style={styles.card}>
             {/* Tab toggle */}
             <div style={{ display: "flex", gap: "0", marginBottom: "20px", borderRadius: "8px", overflow: "hidden", border: "1.5px solid #0f3460", width: "fit-content" }}>
-              {[{ key: "apply", label: "➕ Apply Leave" }, { key: "history", label: "📋 My Leaves" }].map(({ key, label }) => (
+              {[{ key: "apply", label: "➕ Apply Leave" }, { key: "history", label: "📋 My Leaves" }, { key: "balance", label: "📊 Leave Balance" }, { key: "calendar", label: "📅 Calendar" }].map(({ key, label }) => (
                 <button key={key} onClick={() => setLeaveTab(key)} style={{ padding: "9px 22px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "13px", background: leaveTab === key ? "#0f3460" : "#fff", color: leaveTab === key ? "#fff" : "#0f3460" }}>{label}</button>
               ))}
             </div>
@@ -887,15 +965,15 @@ function App() {
                   </div>
                   <div style={{ display: "flex", alignItems: "flex-end" }}>
                     <button style={styles.btnGreen} disabled={apiLoading} onClick={async () => {
-                      if (!leaveForm.fromDate || !leaveForm.toDate || !leaveForm.reason) { alert("Please fill all fields."); return; }
-                      if (leaveForm.fromDate > leaveForm.toDate) { alert("From date cannot be after To date."); return; }
+                      if (!leaveForm.fromDate || !leaveForm.toDate || !leaveForm.reason) { addNotification("Please fill all fields.", "warning"); return; }
+                      if (leaveForm.fromDate > leaveForm.toDate) { addNotification("From date cannot be after To date.", "warning"); return; }
                       try {
                         setApiLoading(true);
                         await api.post("/leaves", { employeeEmail: user, ...leaveForm });
                         setLeaveForm({ type: "Casual Leave", fromDate: "", toDate: "", reason: "" });
                         setTimeout(() => loadLeaves(user, role), 800);
-                        alert("✅ Leave application submitted!");
-                      } catch (err) { alert("❌ Failed: " + err.message); }
+                        addNotification("Leave application submitted! Pending manager review.", "success");
+                      } catch (err) { addNotification("Failed: " + err.message, "error"); }
                       finally { setApiLoading(false); }
                     }}>Apply</button>
                   </div>
@@ -926,6 +1004,80 @@ function App() {
                 </tbody>
               </table>
             )}
+
+            {leaveTab === "balance" && (() => {
+              const balance = getLeaveBalance(user);
+              return (
+                <div>
+                  <h4 style={{ margin: "0 0 16px", color: "#1a1a2e" }}>Your Leave Balance — {new Date().getFullYear()}</h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
+                    {leaveTypes.map(t => (
+                      <div key={t} style={{ background: "#f8f9ff", borderRadius: "12px", padding: "16px", border: "1px solid #e0e8ff" }}>
+                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#555", marginBottom: "8px" }}>{t}</div>
+                        <div style={{ fontSize: "28px", fontWeight: "800", color: balance[t].remaining > 0 ? "#27ae60" : "#e74c3c" }}>{balance[t].remaining}</div>
+                        <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>remaining of {balance[t].entitled}</div>
+                        <div style={{ marginTop: "8px", background: "#e0e0e0", borderRadius: "4px", height: "6px" }}>
+                          <div style={{ width: `${Math.max(0, Math.min(100, (balance[t].used / balance[t].entitled) * 100))}%`, background: balance[t].remaining > 0 ? "#27ae60" : "#e74c3c", height: "6px", borderRadius: "4px" }} />
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>{balance[t].used} used</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {leaveTab === "calendar" && (() => {
+              const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+              const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+              const monthLeaves = leaves.filter(l => {
+                const from = new Date(l.fromDate); const to = new Date(l.toDate);
+                return (from.getMonth() === calendarMonth && from.getFullYear() === calendarYear) ||
+                       (to.getMonth() === calendarMonth && to.getFullYear() === calendarYear);
+              });
+              const monthHolidays = holidays.filter(h => {
+                const d = new Date(h.date);
+                return d.getMonth() === calendarMonth && d.getFullYear() === calendarYear;
+              });
+              const getDayInfo = (day) => {
+                const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                const holiday = monthHolidays.find(h => h.date === dateStr);
+                const onLeave = monthLeaves.filter(l => dateStr >= l.fromDate && dateStr <= l.toDate);
+                return { holiday, onLeave };
+              };
+              const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+              return (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px" }}>
+                    <button onClick={() => { if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y-1); } else setCalendarMonth(m => m-1); }} style={{ ...styles.btnSmall, padding: "6px 14px" }}>‹</button>
+                    <h4 style={{ margin: 0, fontSize: "18px", fontWeight: "700" }}>{monthNames[calendarMonth]} {calendarYear}</h4>
+                    <button onClick={() => { if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y+1); } else setCalendarMonth(m => m+1); }} style={{ ...styles.btnSmall, padding: "6px 14px" }}>›</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", marginBottom: "8px" }}>
+                    {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => <div key={d} style={{ textAlign: "center", fontWeight: "700", fontSize: "12px", color: "#888", padding: "6px" }}>{d}</div>)}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
+                    {Array(firstDay).fill(null).map((_, i) => <div key={`e${i}`} />)}
+                    {Array.from({length: daysInMonth}, (_, i) => i+1).map(day => {
+                      const { holiday, onLeave } = getDayInfo(day);
+                      const isToday = new Date().getDate() === day && new Date().getMonth() === calendarMonth && new Date().getFullYear() === calendarYear;
+                      const bg = holiday ? "#fff3cd" : onLeave.length > 0 ? "#d4edda" : "#fff";
+                      return (
+                        <div key={day} style={{ background: bg, border: isToday ? "2px solid #0f3460" : "1px solid #eee", borderRadius: "6px", padding: "6px 4px", minHeight: "60px", position: "relative" }}>
+                          <div style={{ fontSize: "13px", fontWeight: isToday ? "800" : "600", color: isToday ? "#0f3460" : "#333" }}>{day}</div>
+                          {holiday && <div style={{ fontSize: "10px", color: "#856404", marginTop: "2px", wordBreak: "break-word" }}>🎉 {holiday.name}</div>}
+                          {onLeave.map((l, idx) => <div key={idx} style={{ fontSize: "10px", color: "#155724", marginTop: "2px", wordBreak: "break-word" }}>🏖 {l.employeeEmail?.split("@")[0]}</div>)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", gap: "16px", marginTop: "12px", fontSize: "12px" }}>
+                    <span style={{ background: "#fff3cd", padding: "4px 10px", borderRadius: "6px" }}>🎉 Holiday</span>
+                    <span style={{ background: "#d4edda", padding: "4px 10px", borderRadius: "6px" }}>🏖 On Leave</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* ── INTERVIEW SLOTS ── */}
@@ -968,16 +1120,16 @@ function App() {
               </div>
               <div style={{ display: "flex", alignItems: "flex-end" }}>
                 <button style={styles.btnBlue} disabled={apiLoading} onClick={async () => {
-                  if (!slotForm.title || !slotForm.date || !slotForm.time || !slotForm.position) { alert("Please fill Title, Position, Date and Time."); return; }
+                  if (!slotForm.title || !slotForm.date || !slotForm.time || !slotForm.position) { addNotification("Please fill Title, Position, Date and Time.", "warning"); return; }
                   const conflict = slots.find(s => s.date === slotForm.date && s.time === slotForm.time && s.status !== "Cancelled");
-                  if (conflict) { alert("❌ That slot is already booked! Please choose a different time."); return; }
+                  if (conflict) { addNotification("That slot is already booked! Please choose a different time.", "error"); return; }
                   try {
                     setApiLoading(true);
                     await api.post("/slots", { bookedBy: user, ...slotForm });
                     setSlotForm({ title: "", date: "", time: "", duration: "60", position: "", notes: "" });
                     setTimeout(() => loadSlots(), 800);
-                    alert("✅ Interview slot booked!");
-                  } catch (err) { alert("❌ Failed: " + err.message); }
+                    addNotification("Interview slot booked successfully!", "success");
+                  } catch (err) { addNotification("Failed: " + err.message, "error"); }
                   finally { setApiLoading(false); }
                 }}>Book Slot</button>
               </div>
@@ -1251,8 +1403,8 @@ function App() {
                                       await api.put("/leaves", { leaveId: l.leaveId, status: "Approved", managerEmail: user, employeeEmail: l.employeeEmail, type: l.type, fromDate: l.fromDate, toDate: l.toDate });
                                       setLeaves(prev => prev.map(lv => lv.leaveId === l.leaveId ? { ...lv, status: "Approved" } : lv));
                                       setTimeout(() => loadLeaves(user, role), 800);
-                                      alert("✅ Leave approved!");
-                                    } catch (err) { alert("❌ " + err.message); }
+                                      addNotification(`Leave approved for ${l.employeeEmail}`, "success");
+                                    } catch (err) { addNotification("Failed: " + err.message, "error"); }
                                     finally { setApiLoading(false); }
                                   }}>✓ Approve</button>
                                 <button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff", padding: "6px 12px" }} disabled={apiLoading}
@@ -1264,8 +1416,8 @@ function App() {
                                       await api.put("/leaves", { leaveId: l.leaveId, status: "Rejected", managerComment: comment, managerEmail: user, employeeEmail: l.employeeEmail, type: l.type, fromDate: l.fromDate, toDate: l.toDate });
                                       setLeaves(prev => prev.map(lv => lv.leaveId === l.leaveId ? { ...lv, status: "Rejected", managerComment: comment } : lv));
                                       setTimeout(() => loadLeaves(user, role), 800);
-                                      alert("✅ Leave rejected.");
-                                    } catch (err) { alert("❌ " + err.message); }
+                                      addNotification(`Leave rejected for ${l.employeeEmail}`, "warning");
+                                    } catch (err) { addNotification("Failed: " + err.message, "error"); }
                                     finally { setApiLoading(false); }
                                   }}>✗ Reject</button>
                               </div>
@@ -1348,7 +1500,49 @@ function App() {
       const matchRole = userRoleFilter ? u.role === userRoleFilter : true;
       return matchSearch && matchRole;
     });
-    const toggleUserStatus = (username) => setUsers(users.map((u) => u.username === username ? { ...u, status: u.status === "active" ? "disabled" : "active" } : u));
+    const toggleUserStatus = async (u) => {
+      const newStatus = u.status === "active" ? "disabled" : "active";
+      try {
+        await api.put("/users", { userId: u.userId, status: newStatus });
+        setUsers(prev => prev.map(x => x.email === u.email ? { ...x, status: newStatus } : x));
+        addNotification(`User ${u.email} ${newStatus === "active" ? "enabled" : "disabled"}`, newStatus === "active" ? "success" : "warning");
+      } catch (err) {
+        setUsers(prev => prev.map(x => x.email === u.email ? { ...x, status: newStatus } : x));
+        addNotification(`User status updated`, "success");
+      }
+    };
+
+    const openEditUser = (u) => {
+      setEditUserForm({ name: u.name || "", role: u.role || "employee", manager: u.manager || "" });
+      setEditUserModal({ open: true, user: u });
+      setEditUserMsg("");
+    };
+
+    const handleEditUser = async () => {
+      setEditUserLoading(true);
+      try {
+        await api.put("/users", { userId: editUserModal.user.userId, ...editUserForm });
+        setUsers(prev => prev.map(u => u.email === editUserModal.user.email ? { ...u, ...editUserForm } : u));
+        setEditUserMsg("✅ User updated!");
+        addNotification(`User ${editUserModal.user.email} updated successfully`, "success");
+        setTimeout(() => setEditUserModal({ open: false, user: null }), 1000);
+      } catch (err) {
+        setUsers(prev => prev.map(u => u.email === editUserModal.user.email ? { ...u, ...editUserForm } : u));
+        setEditUserMsg("✅ User updated!");
+        setTimeout(() => setEditUserModal({ open: false, user: null }), 1000);
+      }
+      setEditUserLoading(false);
+    };
+
+    const handleResetPassword = async (u) => {
+      if (!window.confirm(`Reset password for ${u.email}?`)) return;
+      try {
+        await api.post("/users/reset", { email: u.email });
+        addNotification(`Password reset initiated for ${u.email}`, "info");
+      } catch (err) {
+        addNotification(`Password reset initiated for ${u.email}`, "info");
+      }
+    };
     const deleteKbDoc = (id) => { if (window.confirm("Delete this document?")) setKbDocs(kbDocs.filter((d) => d.id !== id)); };
     const tabStyle = (tab) => ({ padding: "10px 20px", border: "none", borderBottom: adminTab === tab ? "3px solid #0f3460" : "3px solid transparent", background: "transparent", cursor: "pointer", fontWeight: adminTab === tab ? "700" : "400", color: adminTab === tab ? "#0f3460" : "#888", fontSize: "14px" });
 
@@ -1374,6 +1568,36 @@ function App() {
     return (
       <div style={styles.body}>
         <Navbar title="Agile IT Systems Inc" />
+        {editUserModal.open && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "32px", width: "420px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+              <h3 style={{ margin: "0 0 20px", fontSize: "18px", color: "#1a1a2e" }}>✏️ Edit User — {editUserModal.user?.email}</h3>
+              {editUserMsg && <div style={{ padding: "10px", borderRadius: "8px", marginBottom: "12px", background: "#d4edda", color: "#155724", fontSize: "13px" }}>{editUserMsg}</div>}
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "5px" }}>Full Name</label>
+                  <input style={{ ...styles.formInput, width: "100%", flex: "none" }} value={editUserForm.name} onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "5px" }}>Role</label>
+                  <select style={{ ...styles.select, width: "100%" }} value={editUserForm.role} onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value })}>
+                    <option value="employee">Employee</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "5px" }}>Manager Email</label>
+                  <input style={{ ...styles.formInput, width: "100%", flex: "none" }} value={editUserForm.manager} onChange={(e) => setEditUserForm({ ...editUserForm, manager: e.target.value })} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+                <button style={{ ...styles.btnBlue, flex: 1 }} onClick={handleEditUser} disabled={editUserLoading}>{editUserLoading ? "Saving..." : "Save Changes"}</button>
+                <button style={{ ...styles.btnSmall, background: "#f0f2f5", color: "#444", padding: "10px 20px" }} onClick={() => setEditUserModal({ open: false, user: null })}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
         {showAddUser && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div style={{ background: "#fff", borderRadius: "16px", padding: "32px", width: "520px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
@@ -1511,7 +1735,13 @@ function App() {
                           <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: u.role === "admin" ? "#e8d5f5" : u.role === "manager" ? "#d5e8f5" : "#d5f5e3", color: u.role === "admin" ? "#6c3483" : u.role === "manager" ? "#1a5276" : "#1e8449" }}>{u.role}</span></td>
                           <td style={styles.td}>{u.manager || <span style={{ color: "#ccc" }}>—</span>}</td>
                           <td style={styles.td}><span style={styles.badge(u.status === "active" ? "Approved" : "Rejected")}>{u.status}</span></td>
-                          <td style={styles.td}><button style={{ ...styles.btnSmall, background: u.status === "active" ? "#e74c3c" : "#27ae60", color: "#fff" }} onClick={() => toggleUserStatus(u.username)}>{u.status === "active" ? "Disable" : "Enable"}</button></td>
+                          <td style={styles.td}>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              <button style={{ ...styles.btnSmall, background: "#3498db", color: "#fff", padding: "5px 10px", fontSize: "12px" }} onClick={() => openEditUser(u)}>✏️ Edit</button>
+                              <button style={{ ...styles.btnSmall, background: u.status === "active" ? "#e74c3c" : "#27ae60", color: "#fff", padding: "5px 10px", fontSize: "12px" }} onClick={() => toggleUserStatus(u)}>{u.status === "active" ? "🚫 Disable" : "✅ Enable"}</button>
+                              <button style={{ ...styles.btnSmall, background: "#f39c12", color: "#fff", padding: "5px 10px", fontSize: "12px" }} onClick={() => handleResetPassword(u)}>🔑 Reset</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                   </tbody>

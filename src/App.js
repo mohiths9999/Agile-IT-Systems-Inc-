@@ -1363,10 +1363,9 @@ function App() {
         });
         const data = await res.json();
         if (res.ok) {
-          setAddUserMsg("✅ User created! A welcome email with temporary password has been sent.");
+          setAddUserMsg(`✅ User created! Username: ${data.username} | Temp Password: ${data.tempPassword} — Share these with the user to login.`);
           setUsers([...users, { username: newUserForm.email, email: newUserForm.email, role: newUserForm.role, manager: newUserForm.manager, status: "active" }]);
           setNewUserForm({ name: "", email: "", role: "employee", manager: "" });
-          setTimeout(() => { setShowAddUser(false); setAddUserMsg(""); }, 2000);
         } else { setAddUserMsg(`❌ ${data.error || "Failed to create user"}`); }
       } catch (e) { setAddUserMsg("❌ Network error. Please try again."); }
       setAddUserLoading(false);

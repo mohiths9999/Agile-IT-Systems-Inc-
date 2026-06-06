@@ -1356,7 +1356,7 @@ function App() {
       if (!newUserForm.name || !newUserForm.email || !newUserForm.role) { setAddUserMsg("❌ Please fill all required fields."); return; }
       setAddUserLoading(true); setAddUserMsg("");
       try {
-        const res = await fetch(`${API}/users`, {
+        const res = await fetch(`${API_BASE}/users`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: newUserForm.name, email: newUserForm.email, role: newUserForm.role, manager: newUserForm.manager, createdBy: user?.username || "admin" })

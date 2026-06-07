@@ -122,6 +122,40 @@ const styles = {
   }),
 };
 
+// SearchBox defined outside App to prevent remounting on parent re-render
+const SearchBox = React.memo(({ onSearch, style }) => {
+  const [query, setQuery] = React.useState("");
+  const [show, setShow] = React.useState(false);
+  const results = onSearch(query);
+  return (
+    <div style={{ flex: 1, maxWidth: "340px", margin: "0 24px", position: "relative" }}>
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); setShow(e.target.value.length > 1); }}
+        onBlur={() => setTimeout(() => setShow(false), 200)}
+        placeholder="🔍 Search timesheets, leaves, users..."
+        style={style}
+      />
+      {show && results.length > 0 && (
+        <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: "#fff", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, overflow: "hidden" }}>
+          {results.map((r, i) => (
+            <div key={i} style={{ padding: "10px 14px", borderBottom: "1px solid #eee", cursor: "pointer" }}
+              onMouseDown={() => { setQuery(""); setShow(false); }}>
+              <div style={{ fontSize: "13px", color: "#333", fontWeight: "600" }}>{r.icon} {r.label}</div>
+              <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>{r.type} • {r.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {show && results.length === 0 && query.length > 1 && (
+        <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: "#fff", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, padding: "14px", textAlign: "center", color: "#888", fontSize: "13px" }}>
+          No results found
+        </div>
+      )}
+    </div>
+  );
+});
+
 function App() {
   // ─── AUTH STATE ───────────────────────────────────────────────────────────
   const [user, setUser] = useState(null);
@@ -162,9 +196,7 @@ function App() {
   const [profileSaved, setProfileSaved] = useState(false);
 
   // ─── GLOBAL SEARCH STATE ─────────────────────────────────────────────────
-  const [globalSearch, setGlobalSearch] = useState("");
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const searchRef = React.useRef(null);
+  // ─── GLOBAL SEARCH (handled by SearchBox component) ─────────────────────
 
   // ─── TIMESHEET STATE ──────────────────────────────────────────────────────
   const [timesheets, setTimesheets] = useState([]);
@@ -306,9 +338,9 @@ function App() {
   };
 
   // ─── GLOBAL SEARCH ───────────────────────────────────────────────────────
-  const getSearchResults = () => {
-    if (!globalSearch.trim()) return [];
-    const q = globalSearch.toLowerCase();
+  const getSearchResults = (query = "") => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
     const results = [];
     timesheets.forEach(t => {
       if ((t.project||"").toLowerCase().includes(q) || (t.employeeEmail||"").toLowerCase().includes(q) || (t.task||"").toLowerCase().includes(q)) {
@@ -621,36 +653,7 @@ function App() {
         <img src={LOGO_B64} alt="logo" style={{ height: "38px", objectFit: "contain", borderRadius: "4px" }} />
         <div style={styles.navTitle}>{title}</div>
       </div>
-      <div style={{ flex: 1, maxWidth: "340px", margin: "0 24px", position: "relative" }}>
-        <input
-          ref={searchRef}
-          defaultValue=""
-          onChange={e => {
-            const val = e.target.value;
-            setGlobalSearch(val);
-            setShowSearchResults(val.length > 1);
-          }}
-          onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
-          placeholder="🔍 Search timesheets, leaves, users..."
-          style={{ width: "100%", padding: "8px 14px", borderRadius: "20px", border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
-        />
-        {showSearchResults && getSearchResults().length > 0 && (
-          <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: D.card, borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, overflow: "hidden" }}>
-            {getSearchResults().map((r, i) => (
-              <div key={i} style={{ padding: "10px 14px", borderBottom: `1px solid ${D.border}`, cursor: "pointer", background: D.card }}
-                onMouseDown={() => { setGlobalSearch(""); setShowSearchResults(false); if (searchRef.current) searchRef.current.value = ""; }}>
-                <div style={{ fontSize: "13px", color: D.text, fontWeight: "600" }}>{r.icon} {r.label}</div>
-                <div style={{ fontSize: "11px", color: D.textMuted, marginTop: "2px" }}>{r.type} • {r.sub}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {showSearchResults && getSearchResults().length === 0 && globalSearch.length > 1 && (
-          <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: D.card, borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, padding: "14px", textAlign: "center", color: D.textMuted, fontSize: "13px" }}>
-            No results found
-          </div>
-        )}
-      </div>
+      <SearchBox onSearch={getSearchResults} style={{ width: "100%", padding: "8px 14px", borderRadius: "20px", border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box" }} />
       <div style={styles.navRight}>
         <button onClick={toggleDark} title="Toggle dark mode" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", padding: "4px 8px" }}>
           {darkMode ? "☀️" : "🌙"}

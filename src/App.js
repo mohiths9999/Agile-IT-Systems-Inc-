@@ -1229,126 +1229,6 @@ function App() {
             })()}
           </div>
 
-          {/* ── INTERVIEW SLOTS ── */}
-          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📅 Interview Slots</div>
-          <div style={{ ...styles.card, background: D.card, color: D.text }}>
-            <div style={{ marginBottom: "16px", padding: "12px 16px", background: "#f0f4ff", borderRadius: "8px", fontSize: "13px", color: "#0f3460" }}>
-              📌 Book an interview slot. Once booked, the slot is reserved only for you.
-            </div>
-            <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
-                <label style={styles.label}>Interview Title *</label>
-                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="e.g. React Developer Round 1" value={slotForm.title} onChange={(e) => setSlotForm({ ...slotForm, title: e.target.value })} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                <label style={styles.label}>Position *</label>
-                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="e.g. Frontend Dev" value={slotForm.position} onChange={(e) => setSlotForm({ ...slotForm, position: e.target.value })} />
-              </div>
-            </div>
-            <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                <label style={styles.label}>Date *</label>
-                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={slotForm.date} onChange={(e) => setSlotForm({ ...slotForm, date: e.target.value })} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                <label style={styles.label}>Time *</label>
-                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="time" value={slotForm.time} onChange={(e) => setSlotForm({ ...slotForm, time: e.target.value })} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                <label style={styles.label}>Duration</label>
-                <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={slotForm.duration} onChange={(e) => setSlotForm({ ...slotForm, duration: e.target.value })}>
-                  <option value="30">30 mins</option>
-                  <option value="60">1 hour</option>
-                  <option value="90">1.5 hours</option>
-                  <option value="120">2 hours</option>
-                </select>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
-                <label style={styles.label}>Notes</label>
-                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Any notes..." value={slotForm.notes} onChange={(e) => setSlotForm({ ...slotForm, notes: e.target.value })} />
-              </div>
-              <div style={{ display: "flex", alignItems: "flex-end" }}>
-                <button style={styles.btnBlue} disabled={apiLoading} onClick={async () => {
-                  if (!slotForm.title || !slotForm.date || !slotForm.time || !slotForm.position) { addNotification("Please fill Title, Position, Date and Time.", "warning"); return; }
-                  const conflict = slots.find(s => s.date === slotForm.date && s.time === slotForm.time && s.status !== "Cancelled");
-                  if (conflict) { addNotification("That slot is already booked! Please choose a different time.", "error"); return; }
-                  try {
-                    setApiLoading(true);
-                    await api.post("/slots", { bookedBy: user, ...slotForm });
-                    setSlotForm({ title: "", date: "", time: "", duration: "60", position: "", notes: "" });
-                    setTimeout(() => loadSlots(), 800);
-                    addNotification("Interview slot booked successfully!", "success");
-                  } catch (err) { addNotification("Failed: " + err.message, "error"); }
-                  finally { setApiLoading(false); }
-                }}>Book Slot</button>
-              </div>
-            </div>
-
-            {/* All slots - read only view */}
-            <div style={{ marginTop: "16px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a2e", marginBottom: "10px" }}>All Booked Slots</div>
-              <div style={{ overflowX: "auto" }}><table style={styles.table}>
-                <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Status", "Notes"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {slots.length === 0
-                    ? <tr><td colSpan={8} style={styles.emptyRow}>No slots booked yet.</td></tr>
-                    : slots.sort((a, b) => a.date > b.date ? 1 : -1).map((s) => (
-                      <tr key={s.slotId} style={{ background: s.bookedBy === user ? "#f0fff4" : "transparent" }}>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{s.title}</strong>{s.bookedBy === user && <span style={{ marginLeft: "6px", fontSize: "10px", background: "#27ae60", color: "#fff", padding: "2px 6px", borderRadius: "10px" }}>Mine</span>}</td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.position}</td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.date}</td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.time}</td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.duration} mins</td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.bookedBy === user ? <strong style={{ color: "#27ae60" }}>You</strong> : s.bookedBy}</td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(s.status === "Confirmed" ? "Approved" : s.status === "Cancelled" ? "Rejected" : "Pending")}>{s.status || "Confirmed"}</span></td>
-                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.notes || "—"}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table></div>
-            </div>
-          </div>
-
-          {/* Legal Docs */}
-          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📄 Legal Documents</div>
-          <div style={{ ...styles.card, background: D.card, color: D.text }}>
-            <div style={{ overflowX: "auto" }}><table style={styles.table}>
-              <thead><tr>{["Document", "File", "Status", "Action"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
-              <tbody>
-                {myDocs.map((doc) => {
-                  const acknowledged = doc.acknowledgedBy.find((a) => a.user === user);
-                  return (
-                    <tr key={doc.id}>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.title}</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><a href={`#${doc.file}`} style={{ color: "#0f3460" }}>{doc.file}</a></td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(acknowledged ? "Approved" : "Pending")}>{acknowledged ? "Acknowledged" : "Pending"}</span></td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
-                        {!acknowledged && <button style={{ ...styles.btnSmall, background: "#27ae60", color: "#fff" }} onClick={() => acknowledgeDocument(doc.id)}>Acknowledge</button>}
-                        {acknowledged && <span style={{ fontSize: "12px", color: "#888" }}>on {acknowledged.date}</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table></div>
-          </div>
-
-          {/* Knowledge Base */}
-          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📚 Knowledge Base</div>
-          <div style={{ ...styles.card, background: D.card, color: D.text }}>
-            <div style={{ overflowX: "auto" }}><table style={styles.table}>
-              <thead><tr>{["Title", "Category", "File"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
-              <tbody>
-                {knowledgeBase.map((k) => (
-                  <tr key={k.id}>
-                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{k.title}</td>
-                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{k.category}</span></td>
-                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><a href={`#${k.file}`} style={{ color: "#0f3460" }}>{k.file}</a></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          </div>
         </div>
       </div>
     );
@@ -1580,50 +1460,6 @@ function App() {
             </table></div>
           </div>
 
-          {/* ── INTERVIEW SLOTS VIEW (manager) ── */}
-          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📅 Interview Slots</div>
-          <div style={{ ...styles.card, background: D.card, color: D.text }}>
-            <div style={{ overflowX: "auto" }}><table style={styles.table}>
-              <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Notes", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
-              <tbody>
-                {slots.length === 0
-                  ? <tr><td colSpan={8} style={styles.emptyRow}>No interview slots booked.</td></tr>
-                  : slots.sort((a, b) => a.date > b.date ? 1 : -1).map((s) => (
-                    <tr key={s.slotId}>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{s.title}</strong></td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.position}</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.date}</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.time}</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.duration} mins</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.bookedBy}</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.notes || "—"}</td>
-                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
-                        <button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} disabled={apiLoading}
-                          onClick={async () => {
-                            if (!window.confirm("Cancel this slot?")) return;
-                            try {
-                              setApiLoading(true);
-                              await api.del(`/slots?slotId=${encodeURIComponent(s.slotId)}`);
-                              setTimeout(() => loadSlots(), 800);
-                            } catch (err) { alert("❌ " + err.message); }
-                            finally { setApiLoading(false); }
-                          }}>Cancel</button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table></div>
-          </div>
-
-          {pendingCount > 0 && (
-            <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: "10px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
-              <span style={{ fontSize: "20px" }}>⚠️</span>
-              <div>
-                <strong>{pendingCount} timesheet{pendingCount > 1 ? "s" : ""} awaiting your review.</strong>
-                <div style={{ fontSize: "13px", color: "#856404", marginTop: "2px" }}>Please review and approve or reject them above.</div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1842,7 +1678,7 @@ function App() {
           </div>
 
           <div style={{ display: "flex", borderBottom: "1px solid #e0e0e0", marginBottom: "24px", background: "#fff", borderRadius: "10px 10px 0 0", padding: "0 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-            {[{ key: "overview", label: "📊 Overview" }, { key: "users", label: "👥 Users" }, { key: "timesheets", label: "📋 Timesheets" }, { key: "leaves", label: "🏖️ Leaves" }, { key: "slots", label: "📅 Interviews" }, { key: "legaldocs", label: "📄 Legal Docs" }, { key: "knowledge", label: "📚 Knowledge Base" }].map((tab) => (
+            {[{ key: "overview", label: "📊 Overview" }, { key: "users", label: "👥 Users" }, { key: "timesheets", label: "📋 Timesheets" }, { key: "leaves", label: "🏖️ Leaves" }, { key: "legaldocs", label: "📄 Legal Docs" }].map((tab) => (
               <button key={tab.key} style={tabStyle(tab.key)} onClick={() => setAdminTab(tab.key)}>{tab.label}</button>
             ))}
           </div>
@@ -2010,44 +1846,6 @@ function App() {
             </div>
           )}
 
-          {adminTab === "slots" && (
-            <div>
-              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📅 All Interview Slots</div>
-              <div style={{ ...styles.card, background: D.card, color: D.text }}>
-                <div style={{ overflowX: "auto" }}><table style={styles.table}>
-                  <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Notes", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {slots.length === 0
-                      ? <tr><td colSpan={8} style={styles.emptyRow}>No interview slots yet.</td></tr>
-                      : slots.sort((a, b) => a.date > b.date ? 1 : -1).map((s) => (
-                        <tr key={s.slotId}>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{s.title}</strong></td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.position}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.date}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.time}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.duration} mins</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.bookedBy}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.notes || "—"}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
-                            <button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }}
-                              onClick={async () => {
-                                if (!window.confirm("Delete this slot?")) return;
-                                try {
-                                  setApiLoading(true);
-                                  await api.del(`/slots?slotId=${encodeURIComponent(s.slotId)}`);
-                                  setTimeout(() => loadSlots(), 800);
-                                } catch (err) { alert("❌ " + err.message); }
-                                finally { setApiLoading(false); }
-                              }}>Delete</button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table></div>
-              </div>
-            </div>
-          )}
-
           {adminTab === "legaldocs" && (
             <div>
               <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📄 Legal Documents</div>
@@ -2094,52 +1892,6 @@ function App() {
             </div>
           )}
 
-          {adminTab === "knowledge" && (
-            <div>
-              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📚 Knowledge Base Management</div>
-              <div style={{ ...styles.card, background: D.card, color: D.text }}>
-                <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "20px", marginBottom: "20px", border: "1.5px dashed #ddd" }}>
-                  <div style={{ fontWeight: "600", marginBottom: "12px", color: "#1a1a2e" }}>Upload New Document</div>
-                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                    <input style={{ ...styles.formInput, flex: 2 }} placeholder="Document title" value={newKbDoc.title} onChange={(e) => setNewKbDoc({ ...newKbDoc, title: e.target.value })} />
-                    <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={newKbDoc.category} onChange={(e) => setNewKbDoc({ ...newKbDoc, category: e.target.value })}>
-                      <option value="">Select category</option>
-                      <option value="HR">HR</option>
-                      <option value="HR Policies">HR Policies</option>
-                      <option value="Training">Training</option>
-                      <option value="Project Guidelines">Project Guidelines</option>
-                      <option value="Company Announcements">Company Announcements</option>
-                    </select>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 14px", border: "1.5px dashed #bbb", borderRadius: "8px", cursor: "pointer", fontSize: "13px", color: "#555", background: "#fff" }}>
-                      📎 {newKbDoc.fileName || "Attach file"}
-                      <input type="file" style={{ display: "none" }} accept=".pdf,.doc,.docx,.pptx,.xlsx" onChange={(e) => { const f = e.target.files[0]; if (f) setNewKbDoc({ ...newKbDoc, file: f, fileName: f.name }); }} />
-                    </label>
-                    <button style={styles.btnBlue} onClick={() => {
-                      if (!newKbDoc.title || !newKbDoc.category) { alert("Fill title and category."); return; }
-                      setKbDocs([...kbDocs, { id: Date.now(), title: newKbDoc.title, category: newKbDoc.category, file: newKbDoc.fileName || "document.pdf", uploadedBy: user, uploadedAt: new Date().toISOString().split("T")[0] }]);
-                      setNewKbDoc({ title: "", category: "", file: null, fileName: "" });
-                    }}>Upload</button>
-                  </div>
-                </div>
-                <div style={{ overflowX: "auto" }}><table style={styles.table}>
-                  <thead><tr>{["Title", "Category", "File", "Uploaded By", "Date", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {kbDocs.length === 0 ? <tr><td colSpan={6} style={styles.emptyRow}>No documents yet.</td></tr>
-                      : kbDocs.map((doc) => (
-                        <tr key={doc.id}>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{doc.title}</strong></td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{doc.category}</span></td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ color: "#0f3460", fontSize: "13px" }}>📎 {doc.file}</span></td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.uploadedBy}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.uploadedAt}</td>
-                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} onClick={() => deleteKbDoc(doc.id)}>Delete</button></td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table></div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );

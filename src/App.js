@@ -133,6 +133,38 @@ function App() {
   const [resetData, setResetData] = useState({ email: "", code: "", newPassword: "", confirmPassword: "" });
   const [authMessage, setAuthMessage] = useState("");
 
+  // ─── DARK MODE ────────────────────────────────────────────────────────────
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("agile_dark") === "true");
+  const dm = darkMode;
+  const D = {
+    bg: dm ? "#0f1117" : "#f0f2f5",
+    card: dm ? "#1e2130" : "#fff",
+    navbar: dm ? "#0a0d14" : "#0f3460",
+    text: dm ? "#e0e0e0" : "#333",
+    textMuted: dm ? "#aaa" : "#888",
+    border: dm ? "#2e3347" : "#e0e0e0",
+    inputBg: dm ? "#252838" : "#fff",
+    tableHead: dm ? "#252838" : "#f8f9fa",
+    hover: dm ? "#2a2d3e" : "#f5f5f5",
+    sectionTitle: dm ? "#e0e0e0" : "#1a1a2e",
+  };
+
+  const toggleDark = () => {
+    setDarkMode(prev => {
+      localStorage.setItem("agile_dark", String(!prev));
+      return !prev;
+    });
+  };
+
+  // ─── PROFILE STATE ────────────────────────────────────────────────────────
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "", address: "", bio: "", avatar: "" });
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  // ─── GLOBAL SEARCH STATE ─────────────────────────────────────────────────
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
   // ─── TIMESHEET STATE ──────────────────────────────────────────────────────
   const [timesheets, setTimesheets] = useState([]);
   const [apiLoading, setApiLoading] = useState(false);
@@ -272,6 +304,43 @@ function App() {
     return balance;
   };
 
+  // ─── GLOBAL SEARCH ───────────────────────────────────────────────────────
+  const getSearchResults = () => {
+    if (!globalSearch.trim()) return [];
+    const q = globalSearch.toLowerCase();
+    const results = [];
+    timesheets.forEach(t => {
+      if ((t.project||"").toLowerCase().includes(q) || (t.employeeEmail||"").toLowerCase().includes(q) || (t.task||"").toLowerCase().includes(q)) {
+        results.push({ type: "Timesheet", label: `${t.project} — ${t.employeeEmail}`, sub: `${t.fromDate} to ${t.toDate} • ${t.status}`, icon: "📋" });
+      }
+    });
+    leaves.forEach(l => {
+      if ((l.employeeEmail||"").toLowerCase().includes(q) || (l.type||"").toLowerCase().includes(q) || (l.reason||"").toLowerCase().includes(q)) {
+        results.push({ type: "Leave", label: `${l.type} — ${l.employeeEmail}`, sub: `${l.fromDate} to ${l.toDate} • ${l.status}`, icon: "🏖️" });
+      }
+    });
+    users.filter(u => (u.name||"").toLowerCase().includes(q) || (u.email||"").toLowerCase().includes(q) || (u.role||"").toLowerCase().includes(q)).forEach(u => {
+      results.push({ type: "User", label: `${u.name||u.email}`, sub: `${u.role} • ${u.status||"active"}`, icon: "👤" });
+    });
+    slots.filter(s => (s.title||"").toLowerCase().includes(q) || (s.position||"").toLowerCase().includes(q) || (s.bookedBy||"").toLowerCase().includes(q)).forEach(s => {
+      results.push({ type: "Interview", label: `${s.title} — ${s.position}`, sub: `${s.date} at ${s.time} • ${s.bookedBy}`, icon: "📅" });
+    });
+    return results.slice(0, 8);
+  };
+
+  // ─── LOAD PROFILE ────────────────────────────────────────────────────────
+  const loadProfile = (email) => {
+    const saved = localStorage.getItem(`profile_${email}`);
+    if (saved) setProfileForm(JSON.parse(saved));
+  };
+
+  const saveProfile = () => {
+    localStorage.setItem(`profile_${user}`, JSON.stringify(profileForm));
+    setProfileSaved(true);
+    addNotification("Profile updated successfully!", "success");
+    setTimeout(() => setProfileSaved(false), 2000);
+  };
+
   // ─── LOAD LEAVES ─────────────────────────────────────────────────────────────
   const loadLeaves = async (userEmail, userRole) => {
     try {
@@ -351,6 +420,7 @@ function App() {
       await loadSlots();
       // Register service worker and request notification permission
       registerServiceWorker().then(() => requestNotificationPermission());
+      loadProfile(email);
     } catch (err) {
       alert(err.message || "Invalid credentials.");
     } finally { setLoading(false); }
@@ -545,21 +615,49 @@ function App() {
 
   // ─── NAVBAR ───────────────────────────────────────────────────────────────
   const Navbar = ({ title }) => (
-    <div style={styles.navbar}>
+    <div style={{ ...styles.navbar, background: D.navbar, position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <img src={LOGO_B64} alt="logo" style={{ height: "38px", objectFit: "contain", borderRadius: "4px" }} />
         <div style={styles.navTitle}>{title}</div>
       </div>
+      <div style={{ flex: 1, maxWidth: "340px", margin: "0 24px", position: "relative" }}>
+        <input
+          value={globalSearch}
+          onChange={e => { setGlobalSearch(e.target.value); setShowSearchResults(e.target.value.length > 1); }}
+          onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+          placeholder="🔍 Search timesheets, leaves, users..."
+          style={{ width: "100%", padding: "8px 14px", borderRadius: "20px", border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+        />
+        {showSearchResults && getSearchResults().length > 0 && (
+          <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: D.card, borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, overflow: "hidden" }}>
+            {getSearchResults().map((r, i) => (
+              <div key={i} style={{ padding: "10px 14px", borderBottom: `1px solid ${D.border}`, cursor: "pointer", background: D.card }}
+                onMouseDown={() => { setGlobalSearch(""); setShowSearchResults(false); }}>
+                <div style={{ fontSize: "13px", color: D.text, fontWeight: "600" }}>{r.icon} {r.label}</div>
+                <div style={{ fontSize: "11px", color: D.textMuted, marginTop: "2px" }}>{r.type} • {r.sub}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {showSearchResults && getSearchResults().length === 0 && globalSearch.length > 1 && (
+          <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: D.card, borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, padding: "14px", textAlign: "center", color: D.textMuted, fontSize: "13px" }}>
+            No results found
+          </div>
+        )}
+      </div>
       <div style={styles.navRight}>
+        <button onClick={toggleDark} title="Toggle dark mode" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", padding: "4px 8px" }}>
+          {darkMode ? "☀️" : "🌙"}
+        </button>
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowNotifications(!showNotifications)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "22px", position: "relative", padding: "4px 8px" }}>
             🔔
             {unreadCount > 0 && <span style={{ position: "absolute", top: "-2px", right: "0px", background: "#e74c3c", color: "#fff", borderRadius: "50%", fontSize: "11px", fontWeight: "700", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}
           </button>
           {showNotifications && (
-            <div style={{ position: "absolute", right: 0, top: "40px", width: "360px", background: "#fff", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", zIndex: 2000, maxHeight: "420px", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "14px 16px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: "700", fontSize: "15px" }}>🔔 Notifications {unreadCount > 0 && <span style={{ background: "#e74c3c", color: "#fff", borderRadius: "12px", padding: "2px 8px", fontSize: "12px", marginLeft: "6px" }}>{unreadCount} new</span>}</span>
+            <div style={{ position: "absolute", right: 0, top: "40px", width: "360px", background: D.card, borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", zIndex: 2000, maxHeight: "420px", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "14px 16px", borderBottom: `1px solid ${D.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: "700", fontSize: "15px", color: D.text }}>🔔 Notifications {unreadCount > 0 && <span style={{ background: "#e74c3c", color: "#fff", borderRadius: "12px", padding: "2px 8px", fontSize: "12px", marginLeft: "6px" }}>{unreadCount} new</span>}</span>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button onClick={markAllRead} style={{ fontSize: "12px", color: "#0f3460", background: "none", border: "none", cursor: "pointer" }}>Mark all read</button>
                   <button onClick={clearNotifications} style={{ fontSize: "12px", color: "#e74c3c", background: "none", border: "none", cursor: "pointer" }}>Clear</button>
@@ -567,14 +665,14 @@ function App() {
               </div>
               <div style={{ overflowY: "auto", flex: 1 }}>
                 {notifications.length === 0 ? (
-                  <div style={{ padding: "32px", textAlign: "center", color: "#aaa", fontSize: "14px" }}>No notifications yet</div>
+                  <div style={{ padding: "32px", textAlign: "center", color: D.textMuted, fontSize: "14px" }}>No notifications yet</div>
                 ) : notifications.map(n => (
                   <div key={n.id} onClick={() => setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))}
-                    style={{ padding: "12px 16px", borderBottom: "1px solid #f5f5f5", background: n.read ? "#fff" : "#f0f4ff", cursor: "pointer", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                    style={{ padding: "12px 16px", borderBottom: `1px solid ${D.border}`, background: n.read ? D.card : (darkMode ? "#1a2040" : "#f0f4ff"), cursor: "pointer", display: "flex", gap: "10px", alignItems: "flex-start" }}>
                     <span style={{ fontSize: "18px" }}>{n.type === "success" ? "✅" : n.type === "error" ? "❌" : n.type === "warning" ? "⚠️" : "ℹ️"}</span>
                     <div>
-                      <div style={{ fontSize: "13px", color: "#333" }}>{n.message}</div>
-                      <div style={{ fontSize: "11px", color: "#aaa", marginTop: "3px" }}>{new Date(n.createdAt).toLocaleString()}</div>
+                      <div style={{ fontSize: "13px", color: D.text }}>{n.message}</div>
+                      <div style={{ fontSize: "11px", color: D.textMuted, marginTop: "3px" }}>{new Date(n.createdAt).toLocaleString()}</div>
                     </div>
                     {!n.read && <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#0f3460", marginLeft: "auto", marginTop: "4px", flexShrink: 0 }} />}
                   </div>
@@ -583,20 +681,23 @@ function App() {
             </div>
           )}
         </div>
-        <span style={styles.navUser}>👤 {user}</span>
+        <button onClick={() => setShowProfile(true)} title="My Profile" style={{ background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", borderRadius: "50%", width: "36px", height: "36px", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {profileForm.avatar || "👤"}
+        </button>
+        <span style={styles.navUser}>{user}</span>
         <span style={styles.navRole}>{role}</span>
         <button style={styles.btnLogout} onClick={logout}>Logout</button>
       </div>
     </div>
   );
 
-  // ─── REJECT MODAL ─────────────────────────────────────────────────────────
+    // ─── REJECT MODAL ─────────────────────────────────────────────────────────
   const RejectModal = () => (
     <div style={styles.modalOverlay}>
       <div style={styles.modalBox}>
         <div style={styles.modalTitle}>❌ Reject Timesheet</div>
         <p style={{ fontSize: "14px", color: "#666", marginBottom: "12px" }}>Provide a reason for rejection (mandatory).</p>
-        <textarea style={styles.textarea} placeholder="Enter rejection reason..."
+        <textarea style={{ ...styles.textarea, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Enter rejection reason..."
           value={rejectModal.comment}
           onChange={(e) => setRejectModal({ ...rejectModal, comment: e.target.value })} />
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
@@ -619,12 +720,12 @@ function App() {
           <>
             <div style={{ marginBottom: "10px" }}>
               <label style={styles.label}>Project</label>
-              <input style={styles.formInput} value={editModal.entry.project || ""}
+              <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} value={editModal.entry.project || ""}
                 onChange={(e) => setEditModal({ ...editModal, entry: { ...editModal.entry, project: e.target.value } })} />
             </div>
             <div style={{ marginBottom: "10px" }}>
               <label style={styles.label}>Task</label>
-              <input style={styles.formInput} value={editModal.entry.task || ""}
+              <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} value={editModal.entry.task || ""}
                 onChange={(e) => setEditModal({ ...editModal, entry: { ...editModal.entry, task: e.target.value } })} />
             </div>
             <div style={{ marginBottom: "10px" }}>
@@ -654,7 +755,7 @@ function App() {
           ["fromDate", "toDate", "project", "task", "description", "hours", "comments"].map((field) => (
             <div key={field} style={{ marginBottom: "10px" }}>
               <label style={styles.label}>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
-              <input style={styles.formInput}
+              <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }}
                 type={field.includes("Date") ? "date" : field === "hours" ? "number" : "text"}
                 value={editModal.entry[field] || ""}
                 onChange={(e) => setEditModal({ ...editModal, entry: { ...editModal.entry, [field]: e.target.value } })} />
@@ -769,11 +870,11 @@ function App() {
     const myDocs = legalDocs.filter((doc) => doc.assignedTo.includes("employee"));
 
     return (
-      <div style={styles.body}>
+      <div style={{ ...styles.body, background: D.bg, color: D.text }}>
         <Navbar title="Agile IT Systems Inc" />
         {rejectModal.open && <RejectModal />}
         {editModal.open && <EditModal />}
-        <div style={styles.page}>
+        <div style={{ ...styles.page }}>
           {apiError && <div style={styles.banner("error")}>⚠️ {apiError}</div>}
           {apiLoading && <div style={styles.banner("info")}>⏳ Loading...</div>}
 
@@ -785,8 +886,8 @@ function App() {
           </div>
 
           {/* ── SUBMIT TIMESHEET ── */}
-          <div style={styles.sectionTitle}>➕ Submit Timesheet</div>
-          <div style={styles.card}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>➕ Submit Timesheet</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
             <div style={{ display: "flex", gap: "0", marginBottom: "20px", borderRadius: "8px", overflow: "hidden", border: "1.5px solid #0f3460", width: "fit-content" }}>
               {[{ key: "range", label: "📅 Date Range" }, { key: "daily", label: "📊 Daily / Weekly" }].map(({ key, label }) => (
                 <button key={key} onClick={() => setTimesheetMode(key)} style={{
@@ -799,37 +900,37 @@ function App() {
 
             {timesheetMode === "range" && (
               <>
-                <div style={styles.formRow}>
+                <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>From Date *</label>
-                    <input style={styles.formInput} type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>To Date *</label>
-                    <input style={styles.formInput} type="date" value={form.toDate} min={form.fromDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={form.toDate} min={form.fromDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>Project *</label>
-                    <input style={styles.formInput} placeholder="Project" value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Project" value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>Task *</label>
-                    <input style={styles.formInput} placeholder="Task" value={form.task} onChange={(e) => setForm({ ...form, task: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Task" value={form.task} onChange={(e) => setForm({ ...form, task: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 0.6 }}>
                     <label style={styles.label}>Hours *</label>
-                    <input style={styles.formInput} type="number" placeholder="Hrs" min="0.5" max="40" value={form.hours}
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="number" placeholder="Hrs" min="0.5" max="40" value={form.hours}
                       onChange={(e) => { if (e.target.value === "" || Number(e.target.value) <= 40) setForm({ ...form, hours: e.target.value }); }} />
                   </div>
                 </div>
-                <div style={styles.formRow}>
+                <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                     <label style={styles.label}>Description</label>
-                    <input style={styles.formInput} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                     <label style={styles.label}>Comments</label>
-                    <input style={styles.formInput} placeholder="Comments" value={form.comments} onChange={(e) => setForm({ ...form, comments: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Comments" value={form.comments} onChange={(e) => setForm({ ...form, comments: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1.5 }}>
                     <label style={styles.label}>Supporting Document</label>
@@ -848,18 +949,18 @@ function App() {
 
             {timesheetMode === "daily" && (
               <>
-                <div style={styles.formRow}>
+                <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>Week Starting (Monday) *</label>
-                    <input style={styles.formInput} type="date" value={dailyForm.weekStart} onChange={(e) => setDailyForm({ ...dailyForm, weekStart: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={dailyForm.weekStart} onChange={(e) => setDailyForm({ ...dailyForm, weekStart: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1.5 }}>
                     <label style={styles.label}>Project *</label>
-                    <input style={styles.formInput} placeholder="Project name" value={dailyForm.project} onChange={(e) => setDailyForm({ ...dailyForm, project: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Project name" value={dailyForm.project} onChange={(e) => setDailyForm({ ...dailyForm, project: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1.5 }}>
                     <label style={styles.label}>Task *</label>
-                    <input style={styles.formInput} placeholder="Task description" value={dailyForm.task} onChange={(e) => setDailyForm({ ...dailyForm, task: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Task description" value={dailyForm.task} onChange={(e) => setDailyForm({ ...dailyForm, task: e.target.value })} />
                   </div>
                 </div>
                 <div style={{ marginBottom: "16px" }}>
@@ -897,14 +998,14 @@ function App() {
                     </div>
                   )}
                 </div>
-                <div style={styles.formRow}>
+                <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                     <label style={styles.label}>Description</label>
-                    <input style={styles.formInput} placeholder="Description" value={dailyForm.description} onChange={(e) => setDailyForm({ ...dailyForm, description: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Description" value={dailyForm.description} onChange={(e) => setDailyForm({ ...dailyForm, description: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                     <label style={styles.label}>Comments</label>
-                    <input style={styles.formInput} placeholder="Comments" value={dailyForm.comments} onChange={(e) => setDailyForm({ ...dailyForm, comments: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Comments" value={dailyForm.comments} onChange={(e) => setDailyForm({ ...dailyForm, comments: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1.5 }}>
                     <label style={styles.label}>Supporting Document</label>
@@ -923,24 +1024,24 @@ function App() {
           </div>
 
           {/* ── MY TIMESHEETS ── */}
-          <div style={styles.sectionTitle}>📋 My Timesheets</div>
-          <div style={styles.card}>
-            <table style={styles.table}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📋 My Timesheets</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
+            <div style={{ overflowX: "auto" }}><table style={styles.table}>
               <thead>
-                <tr>{["Mode", "From", "To", "Project", "Task", "Hours", "Daily Breakdown", "Status", "Doc", "Manager Comment", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr>
+                <tr>{["Mode", "From", "To", "Project", "Task", "Hours", "Daily Breakdown", "Status", "Doc", "Manager Comment", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {myTimesheets.length === 0 ? (
                   <tr><td colSpan={11} style={styles.emptyRow}>No timesheets submitted yet.</td></tr>
                 ) : myTimesheets.map((t) => (
                   <tr key={t.id}>
-                    <td style={styles.td}><span style={{ fontSize: "11px", fontWeight: "600", background: t.mode === "daily" ? "#e8f4fd" : "#f0f0f0", color: t.mode === "daily" ? "#0f3460" : "#555", padding: "2px 8px", borderRadius: "10px" }}>{t.mode === "daily" ? "📊 Weekly" : "📅 Range"}</span></td>
-                    <td style={styles.td}>{t.fromDate || "—"}</td>
-                    <td style={styles.td}>{t.toDate || "—"}</td>
-                    <td style={styles.td}>{t.project}</td>
-                    <td style={styles.td}>{t.task}</td>
-                    <td style={styles.td}><strong>{t.hours}h</strong></td>
-                    <td style={styles.td}>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ fontSize: "11px", fontWeight: "600", background: t.mode === "daily" ? "#e8f4fd" : "#f0f0f0", color: t.mode === "daily" ? "#0f3460" : "#555", padding: "2px 8px", borderRadius: "10px" }}>{t.mode === "daily" ? "📊 Weekly" : "📅 Range"}</span></td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.fromDate || "—"}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.toDate || "—"}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.project}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.task}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{t.hours}h</strong></td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                       {t.mode === "daily" && t.dailyHours ? (
                         <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                           {Object.entries(t.dailyHours).filter(([, v]) => v.hours > 0).map(([d, v]) => (
@@ -949,10 +1050,10 @@ function App() {
                         </div>
                       ) : <span style={{ color: "#ccc", fontSize: "12px" }}>—</span>}
                     </td>
-                    <td style={styles.td}><span style={styles.badge(t.status)}>{t.status}</span></td>
-                    <td style={styles.td}>{t.supportingDocName ? <span style={{ fontSize: "12px", color: "#0f3460" }}>📎 {t.supportingDocName}</span> : <span style={{ color: "#ccc" }}>—</span>}</td>
-                    <td style={styles.td}>{t.managerComment || "—"}</td>
-                    <td style={styles.td}>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(t.status)}>{t.status}</span></td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.supportingDocName ? <span style={{ fontSize: "12px", color: "#0f3460" }}>📎 {t.supportingDocName}</span> : <span style={{ color: "#ccc" }}>—</span>}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.managerComment || "—"}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                       {t.status === "Pending" && (
                         <>
                           <button style={{ ...styles.btnSmall, background: "#3498db", color: "#fff" }} onClick={() => openEditModal(t)}>Edit</button>
@@ -967,8 +1068,8 @@ function App() {
           </div>
 
           {/* ── LEAVE MANAGEMENT ── */}
-          <div style={styles.sectionTitle}>🏖️ Leave Management</div>
-          <div style={styles.card}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>🏖️ Leave Management</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
             {/* Tab toggle */}
             <div style={{ display: "flex", gap: "0", marginBottom: "20px", borderRadius: "8px", overflow: "hidden", border: "1.5px solid #0f3460", width: "fit-content" }}>
               {[{ key: "apply", label: "➕ Apply Leave" }, { key: "history", label: "📋 My Leaves" }, { key: "balance", label: "📊 Leave Balance" }, { key: "calendar", label: "📅 Calendar" }].map(({ key, label }) => (
@@ -978,10 +1079,10 @@ function App() {
 
             {leaveTab === "apply" && (
               <>
-                <div style={styles.formRow}>
+                <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>Leave Type *</label>
-                    <select style={styles.select} value={leaveForm.type} onChange={(e) => setLeaveForm({ ...leaveForm, type: e.target.value })}>
+                    <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={leaveForm.type} onChange={(e) => setLeaveForm({ ...leaveForm, type: e.target.value })}>
                       <option>Casual Leave</option>
                       <option>Sick Leave</option>
                       <option>Annual Leave</option>
@@ -990,17 +1091,17 @@ function App() {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>From Date *</label>
-                    <input style={styles.formInput} type="date" value={leaveForm.fromDate} onChange={(e) => setLeaveForm({ ...leaveForm, fromDate: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={leaveForm.fromDate} onChange={(e) => setLeaveForm({ ...leaveForm, fromDate: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                     <label style={styles.label}>To Date *</label>
-                    <input style={styles.formInput} type="date" value={leaveForm.toDate} min={leaveForm.fromDate} onChange={(e) => setLeaveForm({ ...leaveForm, toDate: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={leaveForm.toDate} min={leaveForm.fromDate} onChange={(e) => setLeaveForm({ ...leaveForm, toDate: e.target.value })} />
                   </div>
                 </div>
-                <div style={styles.formRow}>
+                <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 3 }}>
                     <label style={styles.label}>Reason *</label>
-                    <input style={styles.formInput} placeholder="Reason for leave..." value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
+                    <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Reason for leave..." value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", alignItems: "flex-end" }}>
                     <button style={styles.btnGreen} disabled={apiLoading} onClick={async () => {
@@ -1021,8 +1122,8 @@ function App() {
             )}
 
             {leaveTab === "history" && (
-              <table style={styles.table}>
-                <thead><tr>{["Type", "From", "To", "Days", "Reason", "Status", "Manager Comment"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+              <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                <thead><tr>{["Type", "From", "To", "Days", "Reason", "Status", "Manager Comment"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {leaves.filter(l => l.employeeEmail === user || l.employeeId === user).length === 0
                     ? <tr><td colSpan={7} style={styles.emptyRow}>No leave applications yet.</td></tr>
@@ -1030,13 +1131,13 @@ function App() {
                         const days = l.fromDate && l.toDate ? Math.ceil((new Date(l.toDate) - new Date(l.fromDate)) / 86400000) + 1 : "—";
                         return (
                           <tr key={l.leaveId}>
-                            <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{l.type}</span></td>
-                            <td style={styles.td}>{l.fromDate}</td>
-                            <td style={styles.td}>{l.toDate}</td>
-                            <td style={styles.td}><strong>{days}d</strong></td>
-                            <td style={styles.td}>{l.reason}</td>
-                            <td style={styles.td}><span style={styles.badge(l.status)}>{l.status}</span></td>
-                            <td style={styles.td}>{l.managerComment || "—"}</td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{l.type}</span></td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.fromDate}</td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.toDate}</td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{days}d</strong></td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.reason}</td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(l.status)}>{l.status}</span></td>
+                            <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.managerComment || "—"}</td>
                           </tr>
                         );
                       })}
@@ -1120,33 +1221,33 @@ function App() {
           </div>
 
           {/* ── INTERVIEW SLOTS ── */}
-          <div style={styles.sectionTitle}>📅 Interview Slots</div>
-          <div style={styles.card}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📅 Interview Slots</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
             <div style={{ marginBottom: "16px", padding: "12px 16px", background: "#f0f4ff", borderRadius: "8px", fontSize: "13px", color: "#0f3460" }}>
               📌 Book an interview slot. Once booked, the slot is reserved only for you.
             </div>
-            <div style={styles.formRow}>
+            <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
               <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                 <label style={styles.label}>Interview Title *</label>
-                <input style={styles.formInput} placeholder="e.g. React Developer Round 1" value={slotForm.title} onChange={(e) => setSlotForm({ ...slotForm, title: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="e.g. React Developer Round 1" value={slotForm.title} onChange={(e) => setSlotForm({ ...slotForm, title: e.target.value })} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>Position *</label>
-                <input style={styles.formInput} placeholder="e.g. Frontend Dev" value={slotForm.position} onChange={(e) => setSlotForm({ ...slotForm, position: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="e.g. Frontend Dev" value={slotForm.position} onChange={(e) => setSlotForm({ ...slotForm, position: e.target.value })} />
               </div>
             </div>
-            <div style={styles.formRow}>
+            <div style={{ ...styles.formRow, flexWrap: "wrap" }}>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>Date *</label>
-                <input style={styles.formInput} type="date" value={slotForm.date} onChange={(e) => setSlotForm({ ...slotForm, date: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={slotForm.date} onChange={(e) => setSlotForm({ ...slotForm, date: e.target.value })} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>Time *</label>
-                <input style={styles.formInput} type="time" value={slotForm.time} onChange={(e) => setSlotForm({ ...slotForm, time: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="time" value={slotForm.time} onChange={(e) => setSlotForm({ ...slotForm, time: e.target.value })} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>Duration</label>
-                <select style={styles.select} value={slotForm.duration} onChange={(e) => setSlotForm({ ...slotForm, duration: e.target.value })}>
+                <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={slotForm.duration} onChange={(e) => setSlotForm({ ...slotForm, duration: e.target.value })}>
                   <option value="30">30 mins</option>
                   <option value="60">1 hour</option>
                   <option value="90">1.5 hours</option>
@@ -1155,7 +1256,7 @@ function App() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                 <label style={styles.label}>Notes</label>
-                <input style={styles.formInput} placeholder="Any notes..." value={slotForm.notes} onChange={(e) => setSlotForm({ ...slotForm, notes: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} placeholder="Any notes..." value={slotForm.notes} onChange={(e) => setSlotForm({ ...slotForm, notes: e.target.value })} />
               </div>
               <div style={{ display: "flex", alignItems: "flex-end" }}>
                 <button style={styles.btnBlue} disabled={apiLoading} onClick={async () => {
@@ -1177,21 +1278,21 @@ function App() {
             {/* All slots - read only view */}
             <div style={{ marginTop: "16px" }}>
               <div style={{ fontSize: "14px", fontWeight: "600", color: "#1a1a2e", marginBottom: "10px" }}>All Booked Slots</div>
-              <table style={styles.table}>
-                <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Status", "Notes"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+              <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Status", "Notes"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {slots.length === 0
                     ? <tr><td colSpan={8} style={styles.emptyRow}>No slots booked yet.</td></tr>
                     : slots.sort((a, b) => a.date > b.date ? 1 : -1).map((s) => (
                       <tr key={s.slotId} style={{ background: s.bookedBy === user ? "#f0fff4" : "transparent" }}>
-                        <td style={styles.td}><strong>{s.title}</strong>{s.bookedBy === user && <span style={{ marginLeft: "6px", fontSize: "10px", background: "#27ae60", color: "#fff", padding: "2px 6px", borderRadius: "10px" }}>Mine</span>}</td>
-                        <td style={styles.td}>{s.position}</td>
-                        <td style={styles.td}>{s.date}</td>
-                        <td style={styles.td}>{s.time}</td>
-                        <td style={styles.td}>{s.duration} mins</td>
-                        <td style={styles.td}>{s.bookedBy === user ? <strong style={{ color: "#27ae60" }}>You</strong> : s.bookedBy}</td>
-                        <td style={styles.td}><span style={styles.badge(s.status === "Confirmed" ? "Approved" : s.status === "Cancelled" ? "Rejected" : "Pending")}>{s.status || "Confirmed"}</span></td>
-                        <td style={styles.td}>{s.notes || "—"}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{s.title}</strong>{s.bookedBy === user && <span style={{ marginLeft: "6px", fontSize: "10px", background: "#27ae60", color: "#fff", padding: "2px 6px", borderRadius: "10px" }}>Mine</span>}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.position}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.date}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.time}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.duration} mins</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.bookedBy === user ? <strong style={{ color: "#27ae60" }}>You</strong> : s.bookedBy}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(s.status === "Confirmed" ? "Approved" : s.status === "Cancelled" ? "Rejected" : "Pending")}>{s.status || "Confirmed"}</span></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.notes || "—"}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -1200,19 +1301,19 @@ function App() {
           </div>
 
           {/* Legal Docs */}
-          <div style={styles.sectionTitle}>📄 Legal Documents</div>
-          <div style={styles.card}>
-            <table style={styles.table}>
-              <thead><tr>{["Document", "File", "Status", "Action"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📄 Legal Documents</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
+            <div style={{ overflowX: "auto" }}><table style={styles.table}>
+              <thead><tr>{["Document", "File", "Status", "Action"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
               <tbody>
                 {myDocs.map((doc) => {
                   const acknowledged = doc.acknowledgedBy.find((a) => a.user === user);
                   return (
                     <tr key={doc.id}>
-                      <td style={styles.td}>{doc.title}</td>
-                      <td style={styles.td}><a href={`#${doc.file}`} style={{ color: "#0f3460" }}>{doc.file}</a></td>
-                      <td style={styles.td}><span style={styles.badge(acknowledged ? "Approved" : "Pending")}>{acknowledged ? "Acknowledged" : "Pending"}</span></td>
-                      <td style={styles.td}>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.title}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><a href={`#${doc.file}`} style={{ color: "#0f3460" }}>{doc.file}</a></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(acknowledged ? "Approved" : "Pending")}>{acknowledged ? "Acknowledged" : "Pending"}</span></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                         {!acknowledged && <button style={{ ...styles.btnSmall, background: "#27ae60", color: "#fff" }} onClick={() => acknowledgeDocument(doc.id)}>Acknowledge</button>}
                         {acknowledged && <span style={{ fontSize: "12px", color: "#888" }}>on {acknowledged.date}</span>}
                       </td>
@@ -1224,16 +1325,16 @@ function App() {
           </div>
 
           {/* Knowledge Base */}
-          <div style={styles.sectionTitle}>📚 Knowledge Base</div>
-          <div style={styles.card}>
-            <table style={styles.table}>
-              <thead><tr>{["Title", "Category", "File"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📚 Knowledge Base</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
+            <div style={{ overflowX: "auto" }}><table style={styles.table}>
+              <thead><tr>{["Title", "Category", "File"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
               <tbody>
                 {knowledgeBase.map((k) => (
                   <tr key={k.id}>
-                    <td style={styles.td}>{k.title}</td>
-                    <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{k.category}</span></td>
-                    <td style={styles.td}><a href={`#${k.file}`} style={{ color: "#0f3460" }}>{k.file}</a></td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{k.title}</td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{k.category}</span></td>
+                    <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><a href={`#${k.file}`} style={{ color: "#0f3460" }}>{k.file}</a></td>
                   </tr>
                 ))}
               </tbody>
@@ -1268,10 +1369,10 @@ function App() {
     const uniqueEmployees = [...new Set(timesheets.map((t) => t.employee || t.employeeId || t.employeeEmail || ""))].filter(Boolean);
 
     return (
-      <div style={styles.body}>
+      <div style={{ ...styles.body, background: D.bg, color: D.text }}>
         <Navbar title="Agile IT Systems Inc" />
         {rejectModal.open && <RejectModal />}
-        <div style={styles.page}>
+        <div style={{ ...styles.page }}>
           {apiError && <div style={styles.banner("error")}>⚠️ {apiError}</div>}
           {apiLoading && <div style={styles.banner("info")}>⏳ Processing...</div>}
 
@@ -1288,19 +1389,19 @@ function App() {
             <div style={{ ...styles.statCard, borderTopColor: "#9b59b6" }}><div style={styles.statLabel}>Team Members</div><div style={{ ...styles.statValue, color: "#9b59b6" }}>{uniqueEmployees.length}</div></div>
           </div>
 
-          <div style={styles.sectionTitle}>🔍 Filter Timesheets</div>
-          <div style={styles.card}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>🔍 Filter Timesheets</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
             <div style={styles.filterRow}>
               <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
                 <label style={styles.label}>Employee</label>
-                <select style={styles.select} value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })}>
+                <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })}>
                   <option value="">All Employees</option>
                   {uniqueEmployees.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>Status</label>
-                <select style={styles.select} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+                <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
                   <option value="">All</option>
                   <option value="Pending">Pending</option>
                   <option value="Approved">Approved</option>
@@ -1309,11 +1410,11 @@ function App() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>From Date</label>
-                <input style={styles.formInput} type="date" value={filters.dateFrom} onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={filters.dateFrom} onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                 <label style={styles.label}>To Date</label>
-                <input style={styles.formInput} type="date" value={filters.dateTo} onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })} />
+                <input style={{ ...styles.formInput, background: D.inputBg, color: D.text, borderColor: D.border }} type="date" value={filters.dateTo} onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })} />
               </div>
               <div style={{ display: "flex", alignItems: "flex-end" }}>
                 <button style={{ ...styles.btnSmall, background: "#eee", color: "#555", padding: "10px 18px" }}
@@ -1323,11 +1424,11 @@ function App() {
             <div style={{ fontSize: "13px", color: "#888" }}>Showing <strong>{filtered.length}</strong> of <strong>{timesheets.length}</strong> entries</div>
           </div>
 
-          <div style={styles.sectionTitle}>📋 Team Timesheets</div>
-          <div style={styles.card}>
-            <table style={styles.table}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📋 Team Timesheets</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
+            <div style={{ overflowX: "auto" }}><table style={styles.table}>
               <thead>
-                <tr>{["Employee", "Mode", "From", "To", "Project", "Task", "Hours", "Daily Breakdown", "Status", "Submitted", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr>
+                <tr>{["Employee", "Mode", "From", "To", "Project", "Task", "Hours", "Daily Breakdown", "Status", "Submitted", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
@@ -1336,18 +1437,18 @@ function App() {
                   const empDisplay = t.employee || t.employeeId || t.employeeEmail || "—";
                   return (
                     <tr key={t.id} style={{ background: t.status === "Pending" ? "#fffdf0" : "transparent" }}>
-                      <td style={styles.td}><div style={{ fontWeight: "600", fontSize: "13px" }}>{empDisplay}</div></td>
-                      <td style={styles.td}>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><div style={{ fontWeight: "600", fontSize: "13px" }}>{empDisplay}</div></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                         <span style={{ fontSize: "11px", fontWeight: "600", background: t.mode === "daily" ? "#e8f4fd" : "#f0f0f0", color: t.mode === "daily" ? "#0f3460" : "#555", padding: "2px 8px", borderRadius: "10px" }}>
                           {t.mode === "daily" ? "📊 Weekly" : "📅 Range"}
                         </span>
                       </td>
-                      <td style={styles.td}>{t.fromDate || "—"}</td>
-                      <td style={styles.td}>{t.toDate || "—"}</td>
-                      <td style={styles.td}>{t.project}</td>
-                      <td style={styles.td}>{t.task}</td>
-                      <td style={styles.td}><strong>{t.hours}h</strong></td>
-                      <td style={styles.td}>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.fromDate || "—"}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.toDate || "—"}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.project}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.task}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{t.hours}h</strong></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                         {t.mode === "daily" && t.dailyHours ? (
                           <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
                             {Object.entries(t.dailyHours).filter(([, v]) => v.hours > 0).map(([d, v]) => (
@@ -1356,9 +1457,9 @@ function App() {
                           </div>
                         ) : <span style={{ color: "#ccc", fontSize: "12px" }}>—</span>}
                       </td>
-                      <td style={styles.td}><span style={styles.badge(t.status)}>{t.status}</span></td>
-                      <td style={styles.td}><span style={{ fontSize: "12px", color: "#888" }}>{t.createdAt || "—"}</span></td>
-                      <td style={styles.td}>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(t.status)}>{t.status}</span></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ fontSize: "12px", color: "#888" }}>{t.createdAt || "—"}</span></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                         {t.status === "Pending" && (
                           <div style={{ display: "flex", gap: "6px" }}>
                             <button style={{ ...styles.btnSmall, background: "#27ae60", color: "#fff", padding: "6px 12px" }}
@@ -1382,22 +1483,22 @@ function App() {
             </table>
           </div>
 
-          <div style={styles.sectionTitle}>📊 Team Hours Summary</div>
-          <div style={styles.card}>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📊 Team Hours Summary</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
             {Object.keys(employeeSummary).length === 0 ? <div style={styles.emptyRow}>No data yet.</div> : (
-              <table style={styles.table}>
-                <thead><tr>{["Employee", "Total Hours", "Approved", "Pending", "Rejected", "Progress"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+              <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                <thead><tr>{["Employee", "Total Hours", "Approved", "Pending", "Rejected", "Progress"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {Object.entries(employeeSummary).map(([emp, data]) => {
                     const pct = data.total > 0 ? Math.round((data.approved / data.total) * 100) : 0;
                     return (
                       <tr key={emp}>
-                        <td style={styles.td}><strong>{emp}</strong></td>
-                        <td style={styles.td}><strong>{data.total}h</strong></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{emp}</strong></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{data.total}h</strong></td>
                         <td style={{ ...styles.td, color: "#27ae60" }}>{data.approved}h</td>
                         <td style={{ ...styles.td, color: "#e67e22" }}>{data.pending}h</td>
                         <td style={{ ...styles.td, color: "#e74c3c" }}>{data.rejected}h</td>
-                        <td style={styles.td}>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <div style={{ flex: 1, height: "8px", background: "#eee", borderRadius: "4px", overflow: "hidden" }}>
                               <div style={{ width: `${pct}%`, height: "100%", background: "#27ae60", borderRadius: "4px" }} />
@@ -1414,10 +1515,10 @@ function App() {
           </div>
 
           {/* ── LEAVE APPROVALS ── */}
-          <div style={styles.sectionTitle}>🏖️ Leave Requests</div>
-          <div style={styles.card}>
-            <table style={styles.table}>
-              <thead><tr>{["Employee", "Type", "From", "To", "Days", "Reason", "Status", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>🏖️ Leave Requests</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
+            <div style={{ overflowX: "auto" }}><table style={styles.table}>
+              <thead><tr>{["Employee", "Type", "From", "To", "Days", "Reason", "Status", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
               <tbody>
                 {leaves.length === 0
                   ? <tr><td colSpan={8} style={styles.emptyRow}>No leave requests.</td></tr>
@@ -1425,14 +1526,14 @@ function App() {
                       const days = l.fromDate && l.toDate ? Math.ceil((new Date(l.toDate) - new Date(l.fromDate)) / 86400000) + 1 : "—";
                       return (
                         <tr key={l.leaveId} style={{ background: l.status === "Pending" ? "#fffdf0" : "transparent" }}>
-                          <td style={styles.td}><strong style={{ fontSize: "13px" }}>{l.employeeEmail}</strong></td>
-                          <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{l.type}</span></td>
-                          <td style={styles.td}>{l.fromDate}</td>
-                          <td style={styles.td}>{l.toDate}</td>
-                          <td style={styles.td}><strong>{days}d</strong></td>
-                          <td style={styles.td}>{l.reason}</td>
-                          <td style={styles.td}><span style={styles.badge(l.status)}>{l.status}</span></td>
-                          <td style={styles.td}>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong style={{ fontSize: "13px" }}>{l.employeeEmail}</strong></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{l.type}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.fromDate}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.toDate}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{days}d</strong></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.reason}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(l.status)}>{l.status}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                             {l.status === "Pending" && (
                               <div style={{ display: "flex", gap: "6px" }}>
                                 <button style={{ ...styles.btnSmall, background: "#27ae60", color: "#fff", padding: "6px 12px" }} disabled={apiLoading}
@@ -1471,23 +1572,23 @@ function App() {
           </div>
 
           {/* ── INTERVIEW SLOTS VIEW (manager) ── */}
-          <div style={styles.sectionTitle}>📅 Interview Slots</div>
-          <div style={styles.card}>
-            <table style={styles.table}>
-              <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Notes", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+          <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📅 Interview Slots</div>
+          <div style={{ ...styles.card, background: D.card, color: D.text }}>
+            <div style={{ overflowX: "auto" }}><table style={styles.table}>
+              <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Notes", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
               <tbody>
                 {slots.length === 0
                   ? <tr><td colSpan={8} style={styles.emptyRow}>No interview slots booked.</td></tr>
                   : slots.sort((a, b) => a.date > b.date ? 1 : -1).map((s) => (
                     <tr key={s.slotId}>
-                      <td style={styles.td}><strong>{s.title}</strong></td>
-                      <td style={styles.td}>{s.position}</td>
-                      <td style={styles.td}>{s.date}</td>
-                      <td style={styles.td}>{s.time}</td>
-                      <td style={styles.td}>{s.duration} mins</td>
-                      <td style={styles.td}>{s.bookedBy}</td>
-                      <td style={styles.td}>{s.notes || "—"}</td>
-                      <td style={styles.td}>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{s.title}</strong></td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.position}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.date}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.time}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.duration} mins</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.bookedBy}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.notes || "—"}</td>
+                      <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                         <button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} disabled={apiLoading}
                           onClick={async () => {
                             if (!window.confirm("Cancel this slot?")) return;
@@ -1605,8 +1706,50 @@ function App() {
     };
 
     return (
-      <div style={styles.body}>
+      <div style={{ ...styles.body, background: D.bg, color: D.text }}>
         <Navbar title="Agile IT Systems Inc" />
+        {showProfile && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5000 }}>
+            <div style={{ background: D.card, borderRadius: "16px", padding: "32px", width: "460px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+              <h3 style={{ margin: "0 0 20px", fontSize: "18px", color: D.text }}>👤 My Profile</h3>
+              {profileSaved && <div style={{ padding: "10px", borderRadius: "8px", marginBottom: "12px", background: "#d4edda", color: "#155724", fontSize: "13px" }}>✅ Profile saved!</div>}
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ textAlign: "center", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "64px", marginBottom: "8px" }}>{profileForm.avatar || "👤"}</div>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                    {["👤","👩","👨","🧑","👩‍💻","👨‍💻","🧑‍💼","👩‍💼","👨‍💼"].map(e => (
+                      <button key={e} onClick={() => setProfileForm({...profileForm, avatar: e})} style={{ fontSize: "24px", background: profileForm.avatar === e ? "#e8f0ff" : "transparent", border: profileForm.avatar === e ? "2px solid #0f3460" : "2px solid transparent", borderRadius: "8px", cursor: "pointer", padding: "4px" }}>{e}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: D.textMuted, display: "block", marginBottom: "4px" }}>Full Name</label>
+                  <input style={{ ...styles.formInput, width: "100%", flex: "none", background: D.inputBg, color: D.text, borderColor: D.border }} value={profileForm.name} onChange={e => setProfileForm({...profileForm, name: e.target.value})} placeholder="Your name" />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: D.textMuted, display: "block", marginBottom: "4px" }}>Phone</label>
+                  <input style={{ ...styles.formInput, width: "100%", flex: "none", background: D.inputBg, color: D.text, borderColor: D.border }} value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone: e.target.value})} placeholder="+91 99999 99999" />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: D.textMuted, display: "block", marginBottom: "4px" }}>Address</label>
+                  <input style={{ ...styles.formInput, width: "100%", flex: "none", background: D.inputBg, color: D.text, borderColor: D.border }} value={profileForm.address} onChange={e => setProfileForm({...profileForm, address: e.target.value})} placeholder="City, State" />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: D.textMuted, display: "block", marginBottom: "4px" }}>Bio</label>
+                  <textarea style={{ ...styles.textarea, background: D.inputBg, color: D.text, borderColor: D.border, minHeight: "70px" }} value={profileForm.bio} onChange={e => setProfileForm({...profileForm, bio: e.target.value})} placeholder="A short bio about yourself..." />
+                </div>
+                <div style={{ fontSize: "13px", color: D.textMuted, background: D.tableHead, padding: "10px 14px", borderRadius: "8px" }}>
+                  <div>📧 {user}</div>
+                  <div style={{ marginTop: "4px" }}>🎭 Role: {role}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+                <button style={{ ...styles.btnBlue, flex: 1 }} onClick={saveProfile}>Save Profile</button>
+                <button style={{ ...styles.btnSmall, background: "#f0f2f5", color: "#444", padding: "10px 20px" }} onClick={() => setShowProfile(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
         {editUserModal.open && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
             <div style={{ background: "#fff", borderRadius: "16px", padding: "32px", width: "420px", maxWidth: "95vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
@@ -1671,7 +1814,7 @@ function App() {
             </div>
           </div>
         )}}
-        <div style={styles.page}>
+        <div style={{ ...styles.page }}>
           {apiError && <div style={styles.banner("error")}>⚠️ {apiError}</div>}
           {apiLoading && <div style={styles.banner("info")}>⏳ Loading...</div>}
 
@@ -1697,8 +1840,8 @@ function App() {
 
           {adminTab === "overview" && (
             <div>
-              <div style={styles.sectionTitle}>📊 Company Timesheet Overview</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📊 Company Timesheet Overview</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 <div style={{ display: "flex", gap: "32px", flexWrap: "wrap" }}>
                   {[
                     { label: "Total Hours", value: totalHours + "h", color: "#0f3460" },
@@ -1714,8 +1857,8 @@ function App() {
                   ))}
                 </div>
               </div>
-              <div style={styles.sectionTitle}>👤 Hours per Employee</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>👤 Hours per Employee</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 {Object.keys(employeeHours).length === 0 ? <div style={styles.emptyRow}>No timesheet data yet.</div> : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {Object.entries(employeeHours).sort((a, b) => b[1] - a[1]).map(([emp, hrs]) => {
@@ -1735,8 +1878,8 @@ function App() {
                   </div>
                 )}
               </div>
-              <div style={styles.sectionTitle}>👥 Role Distribution</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>👥 Role Distribution</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 <div style={{ display: "flex", gap: "20px" }}>
                   {[{ role: "Employees", count: employeeCount, color: "#0f3460" }, { role: "Managers", count: managerCount, color: "#9b59b6" }, { role: "Admins", count: users.filter(u => u.role === "admin").length, color: "#e94560" }].map((item) => (
                     <div key={item.role} style={{ flex: 1, textAlign: "center", padding: "24px", background: "#f8f9fa", borderRadius: "10px", borderTop: `4px solid ${item.color}` }}>
@@ -1751,11 +1894,11 @@ function App() {
 
           {adminTab === "users" && (
             <div>
-              <div style={styles.sectionTitle}>👥 User Management</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>👥 User Management</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
                   <input style={{ ...styles.formInput, flex: 2 }} placeholder="Search by email or username..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} />
-                  <select style={styles.select} value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
+                  <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
                     <option value="">All Roles</option>
                     <option value="employee">Employee</option>
                     <option value="manager">Manager</option>
@@ -1763,18 +1906,18 @@ function App() {
                   </select>
                   <button style={styles.btnBlue} onClick={() => { setShowAddUser(true); setAddUserMsg(""); }}>➕ Add User</button>
                 </div>
-                <table style={styles.table}>
-                  <thead><tr>{["Username", "Email", "Role", "Manager", "Status", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                  <thead><tr>{["Username", "Email", "Role", "Manager", "Status", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {filteredUsers.length === 0 ? <tr><td colSpan={6} style={styles.emptyRow}>No users found.</td></tr>
                       : filteredUsers.map((u) => (
                         <tr key={u.username}>
-                          <td style={styles.td}><strong>{u.username}</strong></td>
-                          <td style={styles.td}>{u.email}</td>
-                          <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: u.role === "admin" ? "#e8d5f5" : u.role === "manager" ? "#d5e8f5" : "#d5f5e3", color: u.role === "admin" ? "#6c3483" : u.role === "manager" ? "#1a5276" : "#1e8449" }}>{u.role}</span></td>
-                          <td style={styles.td}>{u.manager || <span style={{ color: "#ccc" }}>—</span>}</td>
-                          <td style={styles.td}><span style={styles.badge(u.status === "active" ? "Approved" : "Rejected")}>{u.status}</span></td>
-                          <td style={styles.td}>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{u.username}</strong></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{u.email}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: u.role === "admin" ? "#e8d5f5" : u.role === "manager" ? "#d5e8f5" : "#d5f5e3", color: u.role === "admin" ? "#6c3483" : u.role === "manager" ? "#1a5276" : "#1e8449" }}>{u.role}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{u.manager || <span style={{ color: "#ccc" }}>—</span>}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(u.status === "active" ? "Approved" : "Rejected")}>{u.status}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                               <button style={{ ...styles.btnSmall, background: "#3498db", color: "#fff", padding: "5px 10px", fontSize: "12px" }} onClick={() => openEditUser(u)}>✏️ Edit</button>
                               <button style={{ ...styles.btnSmall, background: u.status === "active" ? "#e74c3c" : "#27ae60", color: "#fff", padding: "5px 10px", fontSize: "12px" }} onClick={() => toggleUserStatus(u)}>{u.status === "active" ? "🚫 Disable" : "✅ Enable"}</button>
@@ -1791,25 +1934,25 @@ function App() {
 
           {adminTab === "timesheets" && (
             <div>
-              <div style={styles.sectionTitle}>📋 All Company Timesheets</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📋 All Company Timesheets</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 <div style={{ fontSize: "13px", color: "#888", marginBottom: "12px" }}>
                   Total: <strong>{timesheets.length}</strong> &nbsp;|&nbsp; Approved: <strong style={{ color: "#27ae60" }}>{approvedCount}</strong> &nbsp;|&nbsp; Pending: <strong style={{ color: "#e67e22" }}>{pendingCount}</strong> &nbsp;|&nbsp; Rejected: <strong style={{ color: "#e74c3c" }}>{rejectedCount}</strong>
                 </div>
-                <table style={styles.table}>
-                  <thead><tr>{["Employee", "Mode", "From", "To", "Project", "Task", "Hours", "Daily Breakdown", "Status", "Submitted"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                  <thead><tr>{["Employee", "Mode", "From", "To", "Project", "Task", "Hours", "Daily Breakdown", "Status", "Submitted"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {timesheets.length === 0 ? <tr><td colSpan={10} style={styles.emptyRow}>No timesheets yet.</td></tr>
                       : timesheets.map((t) => (
                         <tr key={t.id}>
-                          <td style={styles.td}>{t.employee || t.employeeId || t.employeeEmail || "—"}</td>
-                          <td style={styles.td}><span style={{ fontSize: "11px", fontWeight: "600", background: t.mode === "daily" ? "#e8f4fd" : "#f0f0f0", color: t.mode === "daily" ? "#0f3460" : "#555", padding: "2px 8px", borderRadius: "10px" }}>{t.mode === "daily" ? "📊 Weekly" : "📅 Range"}</span></td>
-                          <td style={styles.td}>{t.fromDate || "—"}</td>
-                          <td style={styles.td}>{t.toDate || "—"}</td>
-                          <td style={styles.td}>{t.project}</td>
-                          <td style={styles.td}>{t.task}</td>
-                          <td style={styles.td}><strong>{t.hours}h</strong></td>
-                          <td style={styles.td}>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.employee || t.employeeId || t.employeeEmail || "—"}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ fontSize: "11px", fontWeight: "600", background: t.mode === "daily" ? "#e8f4fd" : "#f0f0f0", color: t.mode === "daily" ? "#0f3460" : "#555", padding: "2px 8px", borderRadius: "10px" }}>{t.mode === "daily" ? "📊 Weekly" : "📅 Range"}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.fromDate || "—"}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.toDate || "—"}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.project}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{t.task}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{t.hours}h</strong></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                             {t.mode === "daily" && t.dailyHours ? (
                               <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
                                 {Object.entries(t.dailyHours).filter(([, v]) => v.hours > 0).map(([d, v]) => (
@@ -1818,8 +1961,8 @@ function App() {
                               </div>
                             ) : <span style={{ color: "#ccc" }}>—</span>}
                           </td>
-                          <td style={styles.td}><span style={styles.badge(t.status)}>{t.status}</span></td>
-                          <td style={styles.td}><span style={{ fontSize: "12px", color: "#888" }}>{t.createdAt || "—"}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(t.status)}>{t.status}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ fontSize: "12px", color: "#888" }}>{t.createdAt || "—"}</span></td>
                         </tr>
                       ))}
                   </tbody>
@@ -1830,10 +1973,10 @@ function App() {
 
           {adminTab === "leaves" && (
             <div>
-              <div style={styles.sectionTitle}>🏖️ All Leave Requests</div>
-              <div style={styles.card}>
-                <table style={styles.table}>
-                  <thead><tr>{["Employee", "Type", "From", "To", "Days", "Reason", "Status", "Manager Comment"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>🏖️ All Leave Requests</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
+                <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                  <thead><tr>{["Employee", "Type", "From", "To", "Days", "Reason", "Status", "Manager Comment"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {leaves.length === 0
                       ? <tr><td colSpan={8} style={styles.emptyRow}>No leave requests yet.</td></tr>
@@ -1841,14 +1984,14 @@ function App() {
                           const days = l.fromDate && l.toDate ? Math.ceil((new Date(l.toDate) - new Date(l.fromDate)) / 86400000) + 1 : "—";
                           return (
                             <tr key={l.leaveId}>
-                              <td style={styles.td}>{l.employeeEmail}</td>
-                              <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{l.type}</span></td>
-                              <td style={styles.td}>{l.fromDate}</td>
-                              <td style={styles.td}>{l.toDate}</td>
-                              <td style={styles.td}><strong>{days}d</strong></td>
-                              <td style={styles.td}>{l.reason}</td>
-                              <td style={styles.td}><span style={styles.badge(l.status)}>{l.status}</span></td>
-                              <td style={styles.td}>{l.managerComment || "—"}</td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.employeeEmail}</td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{l.type}</span></td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.fromDate}</td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.toDate}</td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{days}d</strong></td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.reason}</td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={styles.badge(l.status)}>{l.status}</span></td>
+                              <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{l.managerComment || "—"}</td>
                             </tr>
                           );
                         })}
@@ -1860,23 +2003,23 @@ function App() {
 
           {adminTab === "slots" && (
             <div>
-              <div style={styles.sectionTitle}>📅 All Interview Slots</div>
-              <div style={styles.card}>
-                <table style={styles.table}>
-                  <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Notes", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📅 All Interview Slots</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
+                <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                  <thead><tr>{["Title", "Position", "Date", "Time", "Duration", "Booked By", "Notes", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {slots.length === 0
                       ? <tr><td colSpan={8} style={styles.emptyRow}>No interview slots yet.</td></tr>
                       : slots.sort((a, b) => a.date > b.date ? 1 : -1).map((s) => (
                         <tr key={s.slotId}>
-                          <td style={styles.td}><strong>{s.title}</strong></td>
-                          <td style={styles.td}>{s.position}</td>
-                          <td style={styles.td}>{s.date}</td>
-                          <td style={styles.td}>{s.time}</td>
-                          <td style={styles.td}>{s.duration} mins</td>
-                          <td style={styles.td}>{s.bookedBy}</td>
-                          <td style={styles.td}>{s.notes || "—"}</td>
-                          <td style={styles.td}>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{s.title}</strong></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.position}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.date}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.time}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.duration} mins</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.bookedBy}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{s.notes || "—"}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>
                             <button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }}
                               onClick={async () => {
                                 if (!window.confirm("Delete this slot?")) return;
@@ -1898,13 +2041,13 @@ function App() {
 
           {adminTab === "legaldocs" && (
             <div>
-              <div style={styles.sectionTitle}>📄 Legal Documents</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📄 Legal Documents</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "20px", marginBottom: "20px", border: "1.5px dashed #ddd" }}>
                   <div style={{ fontWeight: "600", marginBottom: "12px", color: "#1a1a2e" }}>Upload New Legal Document</div>
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                     <input style={{ ...styles.formInput, flex: 2 }} placeholder="Document title" value={newKbDoc.title} onChange={(e) => setNewKbDoc({ ...newKbDoc, title: e.target.value })} />
-                    <select style={styles.select} value={newKbDoc.category} onChange={(e) => setNewKbDoc({ ...newKbDoc, category: e.target.value })}>
+                    <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={newKbDoc.category} onChange={(e) => setNewKbDoc({ ...newKbDoc, category: e.target.value })}>
                       <option value="">Select category</option>
                       <option value="HR Policies">HR Policies</option>
                       <option value="Legal">Legal</option>
@@ -1922,18 +2065,18 @@ function App() {
                     }}>Upload</button>
                   </div>
                 </div>
-                <table style={styles.table}>
-                  <thead><tr>{["Title", "Category", "File", "Uploaded By", "Date", "Acknowledged By", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                  <thead><tr>{["Title", "Category", "File", "Uploaded By", "Date", "Acknowledged By", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {legalDocs.map((doc) => (
                       <tr key={doc.id}>
-                        <td style={styles.td}><strong>{doc.title}</strong></td>
-                        <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: "#fff3cd", color: "#856404" }}>{doc.assignedTo?.[0] || "all"}</span></td>
-                        <td style={styles.td}><span style={{ color: "#0f3460", fontSize: "13px" }}>📎 {doc.file}</span></td>
-                        <td style={styles.td}>admin</td>
-                        <td style={styles.td}>—</td>
-                        <td style={styles.td}>{doc.acknowledgedBy.length === 0 ? <span style={{ color: "#aaa", fontSize: "12px" }}>None yet</span> : doc.acknowledgedBy.map((a, i) => <div key={i} style={{ fontSize: "12px", color: "#555" }}>✓ {a.user}</div>)}</td>
-                        <td style={styles.td}><button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} onClick={() => setLegalDocs(legalDocs.filter(d => d.id !== doc.id))}>Delete</button></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{doc.title}</strong></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#fff3cd", color: "#856404" }}>{doc.assignedTo?.[0] || "all"}</span></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ color: "#0f3460", fontSize: "13px" }}>📎 {doc.file}</span></td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>admin</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>—</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.acknowledgedBy.length === 0 ? <span style={{ color: "#aaa", fontSize: "12px" }}>None yet</span> : doc.acknowledgedBy.map((a, i) => <div key={i} style={{ fontSize: "12px", color: "#555" }}>✓ {a.user}</div>)}</td>
+                        <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} onClick={() => setLegalDocs(legalDocs.filter(d => d.id !== doc.id))}>Delete</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1944,13 +2087,13 @@ function App() {
 
           {adminTab === "knowledge" && (
             <div>
-              <div style={styles.sectionTitle}>📚 Knowledge Base Management</div>
-              <div style={styles.card}>
+              <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📚 Knowledge Base Management</div>
+              <div style={{ ...styles.card, background: D.card, color: D.text }}>
                 <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "20px", marginBottom: "20px", border: "1.5px dashed #ddd" }}>
                   <div style={{ fontWeight: "600", marginBottom: "12px", color: "#1a1a2e" }}>Upload New Document</div>
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                     <input style={{ ...styles.formInput, flex: 2 }} placeholder="Document title" value={newKbDoc.title} onChange={(e) => setNewKbDoc({ ...newKbDoc, title: e.target.value })} />
-                    <select style={styles.select} value={newKbDoc.category} onChange={(e) => setNewKbDoc({ ...newKbDoc, category: e.target.value })}>
+                    <select style={{ ...styles.select, background: D.inputBg, color: D.text, borderColor: D.border }} value={newKbDoc.category} onChange={(e) => setNewKbDoc({ ...newKbDoc, category: e.target.value })}>
                       <option value="">Select category</option>
                       <option value="HR">HR</option>
                       <option value="HR Policies">HR Policies</option>
@@ -1969,18 +2112,18 @@ function App() {
                     }}>Upload</button>
                   </div>
                 </div>
-                <table style={styles.table}>
-                  <thead><tr>{["Title", "Category", "File", "Uploaded By", "Date", "Actions"].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <div style={{ overflowX: "auto" }}><table style={styles.table}>
+                  <thead><tr>{["Title", "Category", "File", "Uploaded By", "Date", "Actions"].map(h => <th key={h} style={{ ...styles.th, background: D.tableHead, color: D.text }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {kbDocs.length === 0 ? <tr><td colSpan={6} style={styles.emptyRow}>No documents yet.</td></tr>
                       : kbDocs.map((doc) => (
                         <tr key={doc.id}>
-                          <td style={styles.td}><strong>{doc.title}</strong></td>
-                          <td style={styles.td}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{doc.category}</span></td>
-                          <td style={styles.td}><span style={{ color: "#0f3460", fontSize: "13px" }}>📎 {doc.file}</span></td>
-                          <td style={styles.td}>{doc.uploadedBy}</td>
-                          <td style={styles.td}>{doc.uploadedAt}</td>
-                          <td style={styles.td}><button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} onClick={() => deleteKbDoc(doc.id)}>Delete</button></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><strong>{doc.title}</strong></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ ...styles.badge("Pending"), background: "#e8f4fd", color: "#0f3460" }}>{doc.category}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><span style={{ color: "#0f3460", fontSize: "13px" }}>📎 {doc.file}</span></td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.uploadedBy}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}>{doc.uploadedAt}</td>
+                          <td style={{ ...styles.td, color: D.text, borderBottomColor: D.border }}><button style={{ ...styles.btnSmall, background: "#e74c3c", color: "#fff" }} onClick={() => deleteKbDoc(doc.id)}>Delete</button></td>
                         </tr>
                       ))}
                   </tbody>
@@ -1994,6 +2137,24 @@ function App() {
   }
 
   return <div style={{ textAlign: "center", marginTop: "80px", fontSize: "16px", color: "#e74c3c" }}>Unknown role: <strong>{role}</strong>. Please contact your administrator.</div>;
+}
+
+// Mobile responsive styles injected globally
+const mobileStyle = document.createElement("style");
+mobileStyle.innerHTML = `
+  @media (max-width: 768px) {
+    .agile-page { padding: 12px !important; }
+    .agile-navbar { padding: 0 12px !important; height: auto !important; flex-wrap: wrap !important; gap: 8px !important; padding: 8px 12px !important; }
+    .agile-search { display: none !important; }
+    .agile-stats-row { flex-direction: column !important; }
+    .agile-form-row { flex-direction: column !important; }
+    .agile-table-wrap { overflow-x: auto !important; }
+    table { min-width: 600px !important; }
+  }
+`;
+if (!document.getElementById("agile-mobile-style")) {
+  mobileStyle.id = "agile-mobile-style";
+  document.head.appendChild(mobileStyle);
 }
 
 export default App;

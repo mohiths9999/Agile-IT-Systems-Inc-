@@ -442,7 +442,16 @@ function App() {
     try {
       setLoading(true);
       try { await getCurrentUser(); await signOut(); } catch { }
-      await signIn({ username: loginData.email.trim(), password: loginData.password });
+
+      // Look up username from DynamoDB for users created via UI
+      let loginUsername = loginData.email.trim();
+      try {
+        const allUsers = await api.get("/users");
+        const found = allUsers.find(u => u.email === loginData.email.trim());
+        if (found && found.username) loginUsername = found.username;
+      } catch { /* fallback to email */ }
+
+      await signIn({ username: loginUsername, password: loginData.password });
       const attrs = await fetchUserAttributes();
       const email = loginData.email.trim();
       const r = attrs["custom:role"] || "employee";
@@ -470,7 +479,13 @@ function App() {
     if (!forgotEmail) { setAuthMessage("Please enter your email."); return; }
     try {
       setLoading(true); setAuthMessage("");
-      await resetPassword({ username: forgotEmail.trim() });
+      let fpUsername = forgotEmail.trim();
+      try {
+        const allUsers = await api.get("/users");
+        const found = allUsers.find(u => u.email === forgotEmail.trim());
+        if (found && found.username) fpUsername = found.username;
+      } catch { }
+      await resetPassword({ username: fpUsername });
       setResetData({ ...resetData, email: forgotEmail.trim() });
       setAuthMessage("✅ Code sent! Check your email.");
       setTimeout(() => setAuthScreen("reset"), 1500);

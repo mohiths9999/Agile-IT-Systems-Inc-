@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Amplify } from "aws-amplify";
-import { signIn, signOut, fetchUserAttributes, getCurrentUser, resetPassword, confirmResetPassword } from "@aws-amplify/auth";
+import { signIn, signOut, fetchUserAttributes, getCurrentUser, resetPassword, confirmResetPassword, confirmSignIn } from "@aws-amplify/auth";
 import { awsconfig } from "./aws-exports";
 
 Amplify.configure(awsconfig);
@@ -166,6 +166,7 @@ function App() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [resetData, setResetData] = useState({ email: "", code: "", newPassword: "", confirmPassword: "" });
   const [authMessage, setAuthMessage] = useState("");
+  const [newPasswordData, setNewPasswordData] = useState({ newPassword: "", confirmPassword: "" });
 
   // ─── DARK MODE ────────────────────────────────────────────────────────────
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("agile_dark") === "true");
@@ -454,7 +455,15 @@ function App() {
         }
       } catch { /* fallback to email */ }
 
-      await signIn({ username: loginUsername, password: loginData.password });
+      const result = await signIn({ username: loginUsername, password: loginData.password });
+
+      // Handle first-time login - user must set new password
+      if (result.nextStep?.signInStep === "CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED") {
+        setAuthScreen("newpassword");
+        setLoading(false);
+        return;
+      }
+
       const attrs = await fetchUserAttributes();
       const email = loginData.email.trim();
       const r = attrs["custom:role"] || "employee";
@@ -467,7 +476,7 @@ function App() {
       registerServiceWorker().then(() => requestNotificationPermission());
       loadProfile(email);
     } catch (err) {
-      alert(err.message || "Invalid credentials.");
+      alert(err.message?.includes("authenticated") ? "Invalid email or password." : err.message || "Invalid credentials.");
     } finally { setLoading(false); }
   };
 
@@ -816,6 +825,7 @@ function App() {
             {authScreen === "login" && "Employee Portal — Sign In"}
             {authScreen === "forgot" && "Forgot Password"}
             {authScreen === "reset" && "Reset Password"}
+            {authScreen === "newpassword" && "Set New Password"}
           </div>
           {authMessage && (
             <div style={{ padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", fontWeight: "500",
@@ -880,6 +890,38 @@ function App() {
                 <button style={{ background: "none", border: "none", color: "#0f3460", cursor: "pointer", fontSize: "13px", textDecoration: "underline" }}
                   onClick={() => { setAuthScreen("login"); setAuthMessage(""); }}>← Back to Sign In</button>
               </div>
+            </>
+          )}
+          {authScreen === "newpassword" && (
+            <>
+              <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>This is your first login. Please set a new password.</p>
+              <label style={styles.label}>New Password</label>
+              <input style={styles.input} type="password" placeholder="Min 8 characters" value={newPasswordData.newPassword}
+                onChange={(e) => setNewPasswordData({ ...newPasswordData, newPassword: e.target.value })} />
+              <label style={styles.label}>Confirm New Password</label>
+              <input style={styles.input} type="password" placeholder="Repeat new password" value={newPasswordData.confirmPassword}
+                onChange={(e) => setNewPasswordData({ ...newPasswordData, confirmPassword: e.target.value })} />
+              <button style={{ ...styles.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading} onClick={async () => {
+                if (!newPasswordData.newPassword || newPasswordData.newPassword.length < 8) { setAuthMessage("Password must be at least 8 characters."); return; }
+                if (newPasswordData.newPassword !== newPasswordData.confirmPassword) { setAuthMessage("Passwords do not match."); return; }
+                try {
+                  setLoading(true);
+                  await confirmSignIn({ challengeResponse: newPasswordData.newPassword });
+                  const attrs = await fetchUserAttributes();
+                  const email = loginData.email.trim();
+                  const r = attrs["custom:role"] || "employee";
+                  setUser(email); setRole(r);
+                  await loadTimesheets(email, r);
+                  await loadLeaves(email, r);
+                  registerServiceWorker().then(() => requestNotificationPermission());
+                  loadProfile(email);
+                  setAuthScreen("login"); setAuthMessage("");
+                } catch (err) { setAuthMessage(err.message || "Failed to set password."); }
+                finally { setLoading(false); }
+              }}>
+                {loading ? "Setting..." : "Set New Password"}
+              </button>
+              {authMessage && <div style={{ color: "#e74c3c", fontSize: "13px", marginTop: "12px", textAlign: "center" }}>{authMessage}</div>}
             </>
           )}
         </div>

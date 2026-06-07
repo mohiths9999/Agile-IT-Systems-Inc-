@@ -914,7 +914,14 @@ function App() {
                 if (newPasswordData.newPassword !== newPasswordData.confirmPassword) { setAuthMessage("Passwords do not match."); return; }
                 try {
                   setLoading(true);
-                  await confirmSignIn({ challengeResponse: newPasswordData.newPassword });
+                  await confirmSignIn({ 
+                    challengeResponse: newPasswordData.newPassword,
+                    options: {
+                      userAttributes: {
+                        address: "N/A"
+                      }
+                    }
+                  });
                   const attrs = await fetchUserAttributes();
                   const email = loginData.email.trim();
                   const r = attrs["custom:role"] || "employee";
@@ -1592,13 +1599,24 @@ function App() {
     };
 
     const handleResetPassword = async (u) => {
-      if (!window.confirm(`Reset password for ${u.email}?`)) return;
+      if (!window.confirm(`Reset password for ${u.email}? A new temp password will be generated.`)) return;
       try {
-        await api.post("/users/reset", { email: u.email });
-        addNotification(`Password reset initiated for ${u.email}`, "info");
+        setApiLoading(true);
+        const res = await fetch(`${API_BASE}/users`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: u.userId, action: "resetPassword", email: u.email, name: u.name })
+        });
+        const data = await res.json();
+        if (data.tempPassword) {
+          addNotification(`Password reset for ${u.email}. New temp password: ${data.tempPassword}`, "success");
+          alert(`✅ Password reset!\n\nUsername: ${u.username}\nNew Temp Password: ${data.tempPassword}\n\nShare this with the user.`);
+        } else {
+          addNotification(`Password reset initiated for ${u.email}`, "info");
+        }
       } catch (err) {
-        addNotification(`Password reset initiated for ${u.email}`, "info");
-      }
+        addNotification("Reset failed: " + err.message, "error");
+      } finally { setApiLoading(false); }
     };
     const deleteKbDoc = (id) => { if (window.confirm("Delete this document?")) setKbDocs(kbDocs.filter((d) => d.id !== id)); };
     const tabStyle = (tab) => ({ padding: "10px 20px", border: "none", borderBottom: adminTab === tab ? "3px solid #0f3460" : "3px solid transparent", background: "transparent", cursor: "pointer", fontWeight: adminTab === tab ? "700" : "400", color: adminTab === tab ? "#0f3460" : "#888", fontSize: "14px" });

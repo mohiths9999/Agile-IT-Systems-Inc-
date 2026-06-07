@@ -436,6 +436,9 @@ function App() {
         setUser(email);
         setRole(r);
         await loadTimesheets(email, r);
+        await loadLeaves(email, r);
+        await loadUsers();
+        loadProfile(email);
       } catch { /* not logged in */ }
     };
     restore();

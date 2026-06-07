@@ -164,6 +164,7 @@ function App() {
   // ─── GLOBAL SEARCH STATE ─────────────────────────────────────────────────
   const [globalSearch, setGlobalSearch] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchRef = React.useRef(null);
 
   // ─── TIMESHEET STATE ──────────────────────────────────────────────────────
   const [timesheets, setTimesheets] = useState([]);
@@ -622,8 +623,13 @@ function App() {
       </div>
       <div style={{ flex: 1, maxWidth: "340px", margin: "0 24px", position: "relative" }}>
         <input
-          value={globalSearch}
-          onChange={e => { setGlobalSearch(e.target.value); setShowSearchResults(e.target.value.length > 1); }}
+          ref={searchRef}
+          defaultValue=""
+          onChange={e => {
+            const val = e.target.value;
+            setGlobalSearch(val);
+            setShowSearchResults(val.length > 1);
+          }}
           onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
           placeholder="🔍 Search timesheets, leaves, users..."
           style={{ width: "100%", padding: "8px 14px", borderRadius: "20px", border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
@@ -632,7 +638,7 @@ function App() {
           <div style={{ position: "absolute", top: "38px", left: 0, right: 0, background: D.card, borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", zIndex: 3000, overflow: "hidden" }}>
             {getSearchResults().map((r, i) => (
               <div key={i} style={{ padding: "10px 14px", borderBottom: `1px solid ${D.border}`, cursor: "pointer", background: D.card }}
-                onMouseDown={() => { setGlobalSearch(""); setShowSearchResults(false); }}>
+                onMouseDown={() => { setGlobalSearch(""); setShowSearchResults(false); if (searchRef.current) searchRef.current.value = ""; }}>
                 <div style={{ fontSize: "13px", color: D.text, fontWeight: "600" }}>{r.icon} {r.label}</div>
                 <div style={{ fontSize: "11px", color: D.textMuted, marginTop: "2px" }}>{r.type} • {r.sub}</div>
               </div>

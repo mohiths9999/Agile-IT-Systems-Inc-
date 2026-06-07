@@ -223,11 +223,7 @@ function App() {
   const [filters, setFilters] = useState({ employee: "", status: "", dateFrom: "", dateTo: "" });
 
   // ─── ADMIN STATE ──────────────────────────────────────────────────────────
-  const [users, setUsers] = useState([
-    { username: "mohith_employee", email: "mohiths9999@gmail.com", role: "employee", status: "active", manager: "snagabhairu08@gmail.com" },
-    { username: "nagabhairu_manager", email: "snagabhairu08@gmail.com", role: "manager", status: "active", manager: "" },
-    { username: "mohith_admin", email: "smohithkumar9999@gmail.com", role: "admin", status: "active", manager: "" },
-  ]);
+  const [users, setUsers] = useState([]);
   const [adminTab, setAdminTab] = useState("overview");
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("");
@@ -375,6 +371,14 @@ function App() {
     setTimeout(() => setProfileSaved(false), 2000);
   };
 
+  // ─── LOAD USERS ──────────────────────────────────────────────────────────
+  const loadUsers = async () => {
+    try {
+      const result = await api.get("/users");
+      if (Array.isArray(result)) setUsers(result);
+    } catch(e) { console.log("loadUsers error:", e.message); }
+  };
+
   // ─── LOAD LEAVES ─────────────────────────────────────────────────────────────
   const loadLeaves = async (userEmail, userRole) => {
     try {
@@ -472,6 +476,7 @@ function App() {
       await loadTimesheets(email, r);
       await loadLeaves(email, r);
       await loadSlots();
+      await loadUsers();
       // Register service worker and request notification permission
       registerServiceWorker().then(() => requestNotificationPermission());
       loadProfile(email);
@@ -913,6 +918,7 @@ function App() {
                   setUser(email); setRole(r);
                   await loadTimesheets(email, r);
                   await loadLeaves(email, r);
+                  await loadUsers();
                   registerServiceWorker().then(() => requestNotificationPermission());
                   loadProfile(email);
                   setAuthScreen("login"); setAuthMessage("");
@@ -1606,7 +1612,8 @@ function App() {
         const data = await res.json();
         if (res.ok) {
           setAddUserMsg(`✅ User created! Username: ${data.username} | Temp Password: ${data.tempPassword} — Share these with the user to login.`);
-          setUsers([...users, { username: newUserForm.email, email: newUserForm.email, role: newUserForm.role, manager: newUserForm.manager, status: "active" }]);
+          setUsers([...users, { username: data.username, email: newUserForm.email, role: newUserForm.role, manager: newUserForm.manager, status: "active" }]);
+          setTimeout(() => loadUsers(), 1000);
           setNewUserForm({ name: "", email: "", role: "employee", manager: "" });
         } else { setAddUserMsg(`❌ ${data.error || "Failed to create user"}`); }
       } catch (e) { setAddUserMsg("❌ Network error. Please try again."); }

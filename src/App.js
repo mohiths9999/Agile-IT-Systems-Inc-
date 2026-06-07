@@ -1064,7 +1064,7 @@ function App() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {/* ── LEAVE MANAGEMENT ── */}
@@ -1142,7 +1142,7 @@ function App() {
                         );
                       })}
                 </tbody>
-              </table>
+              </table></div>
             )}
 
             {leaveTab === "balance" && (() => {
@@ -1296,7 +1296,7 @@ function App() {
                       </tr>
                     ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
 
@@ -1321,7 +1321,7 @@ function App() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {/* Knowledge Base */}
@@ -1338,7 +1338,7 @@ function App() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </div>
       </div>
@@ -1480,7 +1480,7 @@ function App() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           <div style={{ ...styles.sectionTitle, color: D.sectionTitle }}>📊 Team Hours Summary</div>
@@ -1510,7 +1510,7 @@ function App() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </div>
 
@@ -1568,7 +1568,7 @@ function App() {
                       );
                     })}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {/* ── INTERVIEW SLOTS VIEW (manager) ── */}
@@ -1603,7 +1603,7 @@ function App() {
                     </tr>
                   ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {pendingCount > 0 && (
@@ -1927,7 +1927,7 @@ function App() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -1966,7 +1966,7 @@ function App() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -1996,7 +1996,7 @@ function App() {
                           );
                         })}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -2034,7 +2034,7 @@ function App() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -2080,7 +2080,7 @@ function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -2127,7 +2127,7 @@ function App() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}

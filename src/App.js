@@ -446,9 +446,12 @@ function App() {
       // Look up username from DynamoDB for users created via UI
       let loginUsername = loginData.email.trim();
       try {
-        const allUsers = await api.get("/users");
-        const found = allUsers.find(u => u.email === loginData.email.trim());
-        if (found && found.username) loginUsername = found.username;
+        const res = await fetch(`${API_BASE}/users`);
+        if (res.ok) {
+          const allUsers = await res.json();
+          const found = allUsers.find(u => u.email === loginData.email.trim());
+          if (found && found.username) loginUsername = found.username;
+        }
       } catch { /* fallback to email */ }
 
       await signIn({ username: loginUsername, password: loginData.password });
@@ -481,9 +484,12 @@ function App() {
       setLoading(true); setAuthMessage("");
       let fpUsername = forgotEmail.trim();
       try {
-        const allUsers = await api.get("/users");
-        const found = allUsers.find(u => u.email === forgotEmail.trim());
-        if (found && found.username) fpUsername = found.username;
+        const res = await fetch(`${API_BASE}/users`);
+        if (res.ok) {
+          const allUsers = await res.json();
+          const found = allUsers.find(u => u.email === forgotEmail.trim());
+          if (found && found.username) fpUsername = found.username;
+        }
       } catch { }
       await resetPassword({ username: fpUsername });
       setResetData({ ...resetData, email: forgotEmail.trim() });
